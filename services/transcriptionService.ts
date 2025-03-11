@@ -5,26 +5,6 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Fixed transcription text for testing
-const TEST_TRANSCRIPTION = `
-This is a sample lecture on modern computing architecture.
-The lecture covers the following topics:
-1. Introduction to CPU architecture and memory management
-2. How software interfaces with hardware components
-3. Optimization techniques for efficient computing
-4. Future trends in computing architecture
-
-In the first section, we discussed the evolution of CPU design from single-core to multi-core processors.
-Memory management has evolved from simple paging to complex virtual memory systems.
-
-The second section covered how modern operating systems provide abstraction layers between applications and hardware.
-System calls, device drivers, and kernel interfaces were explained in detail.
-
-For optimization, we discussed various algorithms including branch prediction, speculative execution, and cache optimization techniques.
-
-Finally, we looked at emerging trends like quantum computing, neuromorphic computing, and specialized AI processors.
-`;
-
 /**
  * Process audio file to get both transcription and summary using a single API call
  * @param audioFile - The audio file to process
@@ -41,10 +21,13 @@ export async function processAudioWithSummary(
   noteId: string;
 }> {
   try {
+    console.log('Processing audio file:', audioFile.name, audioFile.type, audioFile.size);
+    
     // Step 1: Send audio to Gemini API to get both transcription and summary
     const formData = new FormData();
     formData.append('audio', audioFile);
     
+    console.log('Sending audio to Gemini API...');
     const response = await fetch('/api/gemini-audio-process', {
       method: 'POST',
       body: formData,
@@ -55,14 +38,18 @@ export async function processAudioWithSummary(
     }
     
     const data = await response.json();
-    const { transcription, summary } = data;
+    console.log('Received API response:', data);
+    
+    if (!data.transcription || !data.summary) {
+      throw new Error('API returned empty transcription or summary');
+    }
     
     // Step 2: Save to database
-    const noteId = await saveNoteToDatabase(transcription, summary, userId, metadata);
+    const noteId = await saveNoteToDatabase(data.transcription, data.summary, userId, metadata);
     
     return {
-      transcription,
-      summary,
+      transcription: data.transcription,
+      summary: data.summary,
       noteId
     };
   } catch (error) {
