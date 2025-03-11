@@ -6,9 +6,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { AudioVisualizer } from './AudioVisualizer';
 import { useMicrophone } from '@/hooks/useMicrophone';
 import { toast } from 'sonner';
-import { transcribeAudio, summarizeTranscription, saveNote } from '@/services/transcription';
+import { transcribeAudio, summarizeTranscription, saveNote , summarizeAudioDirectly} from '@/services/transcription';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+>>>>>>> 25bfbf2fe2cc6c12d5fb30d643740a3dca492bca
 
 interface AudioRecorderProps {
   onAudioSaved?: (blob: Blob) => void;
@@ -79,6 +80,21 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   };
   
   const handleSave = async () => {
+<<<<<<< HEAD
+    if (audioBlob) {
+      try {
+        setIsProcessing(true);
+        
+        // Step 1: Transcribe audio
+        setProcessingStep('Transcribing audio...');
+        // const transcription = 
+        
+        // Step 2: Summarize using Gemini
+        setProcessingStep('Generating AI summary...');
+        const summary = await summarizeAudioDirectly(audioBlob);
+        
+        // Step 3: Return both the audio blob and processed data
+=======
     if (!audioBlob) {
       toast.error('No recording available');
       return;
@@ -116,6 +132,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       toast.success('Note created successfully');
       
       if (onAudioSaved) {
+>>>>>>> 25bfbf2fe2cc6c12d5fb30d643740a3dca492bca
         onAudioSaved(audioBlob);
       }
       

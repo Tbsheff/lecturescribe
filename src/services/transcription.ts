@@ -196,3 +196,5 @@ export const fetchNoteById = async (id: string) => {
     throw new Error(`Failed to fetch note: ${error.message}`);
   }
 };
+
+>>>>>>> 25bfbf2fe2cc6c12d5fb30d643740a3dca492bca
