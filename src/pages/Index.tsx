@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AudioInputCard } from '@/components/ui/AudioInputCard';
 import { AudioRecorder } from '@/components/audio/AudioRecorder';
 import { AudioUploader } from '@/components/audio/AudioUploader';
-import { Mic, Upload, Search, RefreshCw } from 'lucide-react';
+import { Mic, Upload, Search, RefreshCw, Loader2 } from 'lucide-react';
 import { NoteList } from '@/components/notes/NoteList';
 import { Note } from '@/components/notes/NoteCard';
 import { Separator } from '@/components/ui/separator';

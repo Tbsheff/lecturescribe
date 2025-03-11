@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
@@ -15,9 +14,6 @@ import { format } from 'date-fns';
 
 // React-markdown related imports
 import ReactMarkdown from 'react-markdown';
-
-// Add react-markdown as a dependency
-<lov-add-dependency>react-markdown@9.0.1</lov-add-dependency>
 
 const NotesView = () => {
   const navigate = useNavigate();

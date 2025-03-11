@@ -104,13 +104,13 @@ export const saveNote = async (
     console.log('Saving note to Supabase...');
     
     // 1. Upload audio file to Supabase Storage
-    const user = supabase.auth.getUser();
-    const userId = (await user).data.user?.id;
+    const { data: userData, error: userError } = await supabase.auth.getUser();
     
-    if (!userId) {
+    if (userError || !userData.user) {
       throw new Error('User not authenticated');
     }
     
+    const userId = userData.user.id;
     const fileName = `${userId}/${Date.now()}_recording.webm`;
     
     const { data: uploadData, error: uploadError } = await supabase.storage
@@ -151,7 +151,7 @@ export const saveNote = async (
     }
     
     console.log('Note saved successfully:', noteData);
-    return noteData;
+    return noteData as SavedNote;
   } catch (error: any) {
     console.error('Error in saveNote:', error);
     throw new Error(`Note saving failed: ${error.message}`);
