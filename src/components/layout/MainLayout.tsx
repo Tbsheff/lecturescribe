@@ -1,12 +1,22 @@
 
 import React from 'react';
 import { Sidebar } from './Sidebar';
+import { useAuth } from '@/hooks/useAuth';
+import { Navigate } from 'react-router-dom';
 
 interface MainLayoutProps {
   children: React.ReactNode;
+  requireAuth?: boolean;
 }
 
-export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
+export const MainLayout: React.FC<MainLayoutProps> = ({ children, requireAuth = true }) => {
+  const { user, loading } = useAuth();
+
+  // If authentication is required and the user is not logged in, redirect to auth page
+  if (requireAuth && !loading && !user) {
+    return <Navigate to="/auth" />;
+  }
+
   return (
     <div className="flex min-h-screen">
       <Sidebar />

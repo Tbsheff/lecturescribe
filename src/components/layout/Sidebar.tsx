@@ -1,14 +1,16 @@
 
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Rocket, Settings, Moon, Sun } from 'lucide-react';
+import { Home, Rocket, Settings, Moon, Sun, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/hooks/useTheme';
+import { useAuth } from '@/hooks/useAuth';
 
 export const Sidebar = () => {
   const location = useLocation();
   const { theme, setTheme } = useTheme();
+  const { user, signOut } = useAuth();
   
   const navItems = [
     { name: 'Home', icon: <Home className="h-5 w-5" />, path: '/' },
@@ -64,7 +66,20 @@ export const Sidebar = () => {
         </ul>
       </nav>
 
-      <div className="p-4 mt-auto">
+      <div className="p-4 mt-auto border-t border-border">
+        {user && (
+          <div className="mb-4">
+            <p className="text-sm text-muted-foreground truncate">{user.email}</p>
+            <Button 
+              variant="outline" 
+              className="w-full mt-2 justify-start text-sm"
+              onClick={() => signOut()}
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              Sign Out
+            </Button>
+          </div>
+        )}
         <Button
           variant="outline"
           size="icon"

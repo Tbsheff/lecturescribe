@@ -1,9 +1,10 @@
 
 import React, { useState, useRef } from 'react';
-import { Upload, File, X } from 'lucide-react';
+import { Upload, File, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
+import { transcribeAudio, summarizeTranscription } from '@/services/transcription';
 
 interface AudioUploaderProps {
   onAudioUploaded: (file: File) => void;
@@ -14,6 +15,8 @@ export const AudioUploader: React.FC<AudioUploaderProps> = ({
 }) => {
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStep, setProcessingStep] = useState<string>('');
   const inputRef = useRef<HTMLInputElement>(null);
   
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -66,11 +69,37 @@ export const AudioUploader: React.FC<AudioUploaderProps> = ({
     }
   };
   
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (file) {
-      onAudioUploaded(file);
-      toast.success('File uploaded successfully');
-      setFile(null);
+      try {
+        setIsProcessing(true);
+        
+        // Step 1: Transcribe audio
+        setProcessingStep('Transcribing audio...');
+        const transcription = await transcribeAudio(file);
+        
+        // Step 2: Summarize using Gemini
+        setProcessingStep('Generating AI summary...');
+        const summary = await summarizeTranscription(transcription.text);
+        
+        // Step 3: Return the file and processed data
+        onAudioUploaded(file);
+        
+        // Save in localStorage for demo purposes (in a real app, this would go to Supabase)
+        localStorage.setItem('lastSummary', JSON.stringify(summary));
+        
+        toast.success('Audio processed successfully with AI');
+        setFile(null);
+        if (inputRef.current) {
+          inputRef.current.value = '';
+        }
+      } catch (error: any) {
+        console.error('Processing error:', error);
+        toast.error(`Processing failed: ${error.message}`);
+      } finally {
+        setIsProcessing(false);
+        setProcessingStep('');
+      }
     }
   };
   
@@ -144,15 +173,32 @@ export const AudioUploader: React.FC<AudioUploaderProps> = ({
                 size="icon"
                 className="ml-2"
                 onClick={handleRemoveFile}
+                disabled={isProcessing}
               >
                 <X className="h-4 w-4" />
               </Button>
             </div>
+            
+            {isProcessing && (
+              <div className="flex items-center justify-center gap-2 mt-4 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>{processingStep}</span>
+              </div>
+            )}
+            
             <Button
               className="w-full mt-4 bg-brand hover:bg-brand-dark text-white"
               onClick={handleSubmit}
+              disabled={isProcessing}
             >
-              Upload and Process
+              {isProcessing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                'Process with AI'
+              )}
             </Button>
           </div>
         )}

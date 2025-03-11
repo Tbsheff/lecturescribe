@@ -12,6 +12,8 @@ import { Note } from '@/components/notes/NoteCard';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
+import { useAuth } from '@/hooks/useAuth';
 
 // Mock data for demonstration
 const mockNotes: Note[] = [
@@ -33,6 +35,7 @@ type InputMethod = 'record' | 'upload' | 'url';
 
 const Index = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [inputMethod, setInputMethod] = useState<InputMethod>('record');
   const [notes, setNotes] = useState<Note[]>(mockNotes);
   const [searchQuery, setSearchQuery] = useState('');
@@ -42,35 +45,46 @@ const Index = () => {
     // In a real app, this would upload the blob to a server for processing
     console.log('Audio blob saved:', blob);
     
-    // Simulate processing
-    simulateProcessing();
+    // Since we handle processing in the AudioRecorder/AudioUploader now,
+    // we just need to create a new note entry here
+    const newNote: Note = {
+      id: Date.now().toString(),
+      title: `Lecture Notes - ${new Date().toLocaleDateString()}`,
+      date: new Date(),
+      preview: 'This note was automatically generated from your audio recording using AI.'
+    };
+    
+    setNotes(prev => [newNote, ...prev]);
+    
+    // Navigate to the new note
+    setTimeout(() => {
+      navigate(`/notes/${newNote.id}`);
+    }, 500);
   };
   
   const handleAudioUploaded = (file: File) => {
     // In a real app, this would upload the file to a server for processing
     console.log('Audio file uploaded:', file);
     
-    // Simulate processing
-    simulateProcessing();
+    // Since we handle processing in the AudioUploader now,
+    // we just need to create a new note entry here
+    const newNote: Note = {
+      id: Date.now().toString(),
+      title: `${file.name.split('.')[0]}`,
+      date: new Date(),
+      preview: 'This note was automatically generated from your audio file using AI.'
+    };
+    
+    setNotes(prev => [newNote, ...prev]);
+    
+    // Navigate to the new note
+    setTimeout(() => {
+      navigate(`/notes/${newNote.id}`);
+    }, 500);
   };
   
-  const simulateProcessing = () => {
-    setIsProcessing(true);
-    
-    // Simulate a delay for processing
-    setTimeout(() => {
-      setIsProcessing(false);
-      
-      // Add a new note
-      const newNote: Note = {
-        id: Date.now().toString(),
-        title: `Lecture Notes - ${new Date().toLocaleDateString()}`,
-        date: new Date(),
-        preview: 'This note was automatically generated from your audio recording.'
-      };
-      
-      setNotes(prev => [newNote, ...prev]);
-    }, 3000);
+  const handleUrlSubmit = () => {
+    toast.error("URL processing is not implemented yet");
   };
   
   const handleNoteClick = (id: string) => {
@@ -94,6 +108,7 @@ const Index = () => {
           <p className="text-muted-foreground">
             Transform lectures into structured notes with AI
           </p>
+          {user && <p className="text-sm text-muted-foreground mt-1">Welcome, {user.email}</p>}
         </div>
         
         <div className="mb-10">
@@ -138,7 +153,7 @@ const Index = () => {
                   placeholder="Paste a YouTube URL, Google Drive link, etc."
                   className="flex-1"
                 />
-                <Button>Process</Button>
+                <Button onClick={handleUrlSubmit}>Process</Button>
               </div>
             </div>
           )}

@@ -1,11 +1,12 @@
 
 import React, { useState } from 'react';
-import { Mic, StopCircle, Trash, Save } from 'lucide-react';
+import { Mic, StopCircle, Trash, Save, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { AudioVisualizer } from './AudioVisualizer';
 import { useMicrophone } from '@/hooks/useMicrophone';
 import { toast } from 'sonner';
+import { transcribeAudio, summarizeTranscription } from '@/services/transcription';
 
 interface AudioRecorderProps {
   onAudioSaved: (blob: Blob) => void;
@@ -16,6 +17,8 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
 }) => {
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recordingInterval, setRecordingInterval] = useState<NodeJS.Timeout | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStep, setProcessingStep] = useState<string>('');
   
   const { 
     isRecording, 
@@ -55,11 +58,34 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
     }
   };
   
-  const handleSave = () => {
+  const handleSave = async () => {
     if (audioBlob) {
-      onAudioSaved(audioBlob);
-      toast.success('Audio saved successfully');
-      handleReset();
+      try {
+        setIsProcessing(true);
+        
+        // Step 1: Transcribe audio
+        setProcessingStep('Transcribing audio...');
+        const transcription = await transcribeAudio(audioBlob);
+        
+        // Step 2: Summarize using Gemini
+        setProcessingStep('Generating AI summary...');
+        const summary = await summarizeTranscription(transcription.text);
+        
+        // Step 3: Return both the audio blob and processed data
+        onAudioSaved(audioBlob);
+        
+        // Save in localStorage for demo purposes (in a real app, this would go to Supabase)
+        localStorage.setItem('lastSummary', JSON.stringify(summary));
+        
+        toast.success('Audio processed successfully with AI');
+        handleReset();
+      } catch (error: any) {
+        console.error('Processing error:', error);
+        toast.error(`Processing failed: ${error.message}`);
+      } finally {
+        setIsProcessing(false);
+        setProcessingStep('');
+      }
     }
   };
   
@@ -99,13 +125,20 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
           
           <AudioVisualizer audioData={audioData} isRecording={isRecording} />
           
+          {isProcessing && (
+            <div className="flex items-center justify-center gap-2 mt-4 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>{processingStep}</span>
+            </div>
+          )}
+          
           <div className="flex gap-3 mt-6">
-            {!isRecording && !audioUrl && (
+            {!isRecording && !audioUrl && !isProcessing && (
               <Button 
                 variant="default"
                 className="bg-brand hover:bg-brand-dark text-white gap-2"
                 onClick={handleStartRecording}
-                disabled={isRecording}
+                disabled={isRecording || isProcessing}
               >
                 <Mic className="w-4 h-4" />
                 Start Recording
@@ -117,18 +150,20 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
                 variant="destructive"
                 className="gap-2"
                 onClick={handleStopRecording}
+                disabled={isProcessing}
               >
                 <StopCircle className="w-4 h-4" />
                 Stop Recording
               </Button>
             )}
             
-            {audioUrl && !isRecording && (
+            {audioUrl && !isRecording && !isProcessing && (
               <>
                 <Button 
                   variant="outline"
                   className="gap-2"
                   onClick={handleReset}
+                  disabled={isProcessing}
                 >
                   <Trash className="w-4 h-4" />
                   Discard
@@ -138,9 +173,10 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
                   variant="default"
                   className="bg-brand hover:bg-brand-dark text-white gap-2"
                   onClick={handleSave}
+                  disabled={isProcessing}
                 >
                   <Save className="w-4 h-4" />
-                  Save Recording
+                  Process with AI
                 </Button>
               </>
             )}
