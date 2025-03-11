@@ -1,12 +1,12 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AudioInputCard } from '@/components/ui/AudioInputCard';
 import { AudioRecorder } from '@/components/audio/AudioRecorder';
 import { AudioUploader } from '@/components/audio/AudioUploader';
-import { Mic, Upload, Search } from 'lucide-react';
+import { Mic, Upload, Search, RefreshCw } from 'lucide-react';
 import { NoteList } from '@/components/notes/NoteList';
 import { Note } from '@/components/notes/NoteCard';
 import { Separator } from '@/components/ui/separator';
@@ -14,22 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
-
-// Mock data for demonstration
-const mockNotes: Note[] = [
-  {
-    id: '1',
-    title: 'Introduction to Quantum Computing',
-    date: new Date(2023, 10, 15),
-    preview: 'This lecture covered the fundamentals of quantum computing, including qubits, superposition, and entanglement.'
-  },
-  {
-    id: '2',
-    title: 'Advanced Machine Learning Techniques',
-    date: new Date(2023, 10, 10),
-    preview: 'Deep dive into neural networks, backpropagation, and gradient descent algorithms.'
-  },
-];
+import { fetchNotes } from '@/services/transcription';
 
 type InputMethod = 'record' | 'upload' | 'url';
 
@@ -37,58 +22,53 @@ const Index = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [inputMethod, setInputMethod] = useState<InputMethod>('record');
-  const [notes, setNotes] = useState<Note[]>(mockNotes);
+  const [notes, setNotes] = useState<Note[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   
-  const handleAudioSaved = (blob: Blob) => {
-    // In a real app, this would upload the blob to a server for processing
-    console.log('Audio blob saved:', blob);
-    
-    // Since we handle processing in the AudioRecorder/AudioUploader now,
-    // we just need to create a new note entry here
-    const newNote: Note = {
-      id: Date.now().toString(),
-      title: `Lecture Notes - ${new Date().toLocaleDateString()}`,
-      date: new Date(),
-      preview: 'This note was automatically generated from your audio recording using AI.'
+  // Fetch notes when user changes or refreshTrigger changes
+  useEffect(() => {
+    const loadNotes = async () => {
+      if (!user) {
+        setNotes([]);
+        return;
+      }
+      
+      try {
+        setIsLoading(true);
+        const fetchedNotes = await fetchNotes();
+        
+        // Convert to Note format
+        const formattedNotes: Note[] = fetchedNotes.map((note: any) => ({
+          id: note.id,
+          title: note.title,
+          date: new Date(note.created_at),
+          preview: note.structured_summary?.summary || 'No summary available'
+        }));
+        
+        setNotes(formattedNotes);
+      } catch (error: any) {
+        console.error('Error fetching notes:', error);
+        toast.error('Failed to load notes');
+      } finally {
+        setIsLoading(false);
+      }
     };
     
-    setNotes(prev => [newNote, ...prev]);
-    
-    // Navigate to the new note
-    setTimeout(() => {
-      navigate(`/notes/${newNote.id}`);
-    }, 500);
-  };
+    loadNotes();
+  }, [user, refreshTrigger]);
   
-  const handleAudioUploaded = (file: File) => {
-    // In a real app, this would upload the file to a server for processing
-    console.log('Audio file uploaded:', file);
-    
-    // Since we handle processing in the AudioUploader now,
-    // we just need to create a new note entry here
-    const newNote: Note = {
-      id: Date.now().toString(),
-      title: `${file.name.split('.')[0]}`,
-      date: new Date(),
-      preview: 'This note was automatically generated from your audio file using AI.'
-    };
-    
-    setNotes(prev => [newNote, ...prev]);
-    
-    // Navigate to the new note
-    setTimeout(() => {
-      navigate(`/notes/${newNote.id}`);
-    }, 500);
+  const handleNoteClick = (id: string) => {
+    navigate(`/notes/${id}`);
   };
   
   const handleUrlSubmit = () => {
     toast.error("URL processing is not implemented yet");
   };
   
-  const handleNoteClick = (id: string) => {
-    navigate(`/notes/${id}`);
+  const handleRefresh = () => {
+    setRefreshTrigger(prev => prev + 1);
   };
   
   const filteredNotes = searchQuery 
@@ -139,11 +119,13 @@ const Index = () => {
           </div>
           
           {inputMethod === 'record' && (
-            <AudioRecorder onAudioSaved={handleAudioSaved} />
+            <AudioRecorder />
           )}
           
           {inputMethod === 'upload' && (
-            <AudioUploader onAudioUploaded={handleAudioUploaded} />
+            <AudioUploader onAudioUploaded={(file) => {
+              toast.info("File upload processing is in progress...");
+            }} />
           )}
           
           {inputMethod === 'url' && (
@@ -157,15 +139,6 @@ const Index = () => {
               </div>
             </div>
           )}
-          
-          {isProcessing && (
-            <div className="mt-6 p-4 bg-muted/30 rounded-lg">
-              <div className="flex items-center">
-                <div className="h-3 w-3 rounded-full bg-brand animate-pulse mr-3"></div>
-                <p className="text-sm">Processing your audio... This may take a few minutes.</p>
-              </div>
-            </div>
-          )}
         </div>
         
         <Separator className="my-8" />
@@ -173,14 +146,24 @@ const Index = () => {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-semibold">My Notes</h2>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                className="pl-9 max-w-xs"
-                placeholder="Search notes..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+            <div className="flex items-center gap-4">
+              <Button 
+                size="icon" 
+                variant="outline" 
+                onClick={handleRefresh}
+                disabled={isLoading}
+              >
+                <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              </Button>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  className="pl-9 max-w-xs"
+                  placeholder="Search notes..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
             </div>
           </div>
           
@@ -192,7 +175,32 @@ const Index = () => {
             </TabsList>
           </Tabs>
           
-          <NoteList notes={filteredNotes} onNoteClick={handleNoteClick} />
+          {isLoading ? (
+            <div className="flex justify-center p-8">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            user ? (
+              filteredNotes.length > 0 ? (
+                <NoteList notes={filteredNotes} onNoteClick={handleNoteClick} />
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p>No notes found. Start recording or uploading to create your first note!</p>
+                </div>
+              )
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <p>Please sign in to view your notes.</p>
+                <Button 
+                  className="mt-4" 
+                  variant="outline"
+                  onClick={() => navigate('/auth')}
+                >
+                  Sign In
+                </Button>
+              </div>
+            )
+          )}
         </div>
       </div>
     </MainLayout>

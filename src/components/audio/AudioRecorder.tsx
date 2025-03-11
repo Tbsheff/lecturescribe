@@ -1,20 +1,24 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Mic, StopCircle, Trash, Save, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { AudioVisualizer } from './AudioVisualizer';
 import { useMicrophone } from '@/hooks/useMicrophone';
 import { toast } from 'sonner';
-import { transcribeAudio, summarizeTranscription } from '@/services/transcription';
+import { transcribeAudio, summarizeTranscription, saveNote } from '@/services/transcription';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 
 interface AudioRecorderProps {
-  onAudioSaved: (blob: Blob) => void;
+  onAudioSaved?: (blob: Blob) => void;
 }
 
 export const AudioRecorder: React.FC<AudioRecorderProps> = ({ 
   onAudioSaved 
 }) => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recordingInterval, setRecordingInterval] = useState<NodeJS.Timeout | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -29,8 +33,24 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
     error, 
     audioData 
   } = useMicrophone();
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (recordingInterval) {
+        clearInterval(recordingInterval);
+      }
+    };
+  }, [recordingInterval]);
   
   const handleStartRecording = async () => {
+    // Check if user is authenticated
+    if (!user) {
+      toast.error('Please sign in to record audio');
+      navigate('/auth');
+      return;
+    }
+    
     await startRecording();
     
     // Start duration counter
@@ -59,33 +79,56 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   };
   
   const handleSave = async () => {
-    if (audioBlob) {
-      try {
-        setIsProcessing(true);
-        
-        // Step 1: Transcribe audio
-        setProcessingStep('Transcribing audio...');
-        const transcription = await transcribeAudio(audioBlob);
-        
-        // Step 2: Summarize using Gemini
-        setProcessingStep('Generating AI summary...');
-        const summary = await summarizeTranscription(transcription.text);
-        
-        // Step 3: Return both the audio blob and processed data
+    if (!audioBlob) {
+      toast.error('No recording available');
+      return;
+    }
+
+    if (!user) {
+      toast.error('Please sign in to save recordings');
+      navigate('/auth');
+      return;
+    }
+    
+    try {
+      setIsProcessing(true);
+      
+      // Step 1: Transcribe audio
+      setProcessingStep('Transcribing audio...');
+      const transcription = await transcribeAudio(audioBlob);
+      
+      // Step 2: Summarize using Gemini
+      setProcessingStep('Generating AI summary...');
+      const summary = await summarizeTranscription(transcription.text);
+      
+      // Step 3: Save to Supabase
+      setProcessingStep('Saving to database...');
+      const noteTitle = `Lecture Notes - ${new Date().toLocaleDateString()}`;
+      const savedNote = await saveNote(
+        noteTitle,
+        transcription.text,
+        summary.rawSummary,
+        summary.structuredSummary,
+        audioBlob
+      );
+      
+      // Step 4: Notify user and navigate
+      toast.success('Note created successfully');
+      
+      if (onAudioSaved) {
         onAudioSaved(audioBlob);
-        
-        // Save in localStorage for demo purposes (in a real app, this would go to Supabase)
-        localStorage.setItem('lastSummary', JSON.stringify(summary));
-        
-        toast.success('Audio processed successfully with AI');
-        handleReset();
-      } catch (error: any) {
-        console.error('Processing error:', error);
-        toast.error(`Processing failed: ${error.message}`);
-      } finally {
-        setIsProcessing(false);
-        setProcessingStep('');
       }
+      
+      // Navigate to the new note
+      navigate(`/notes/${savedNote.id}`);
+      
+    } catch (error: any) {
+      console.error('Processing error:', error);
+      toast.error(`Processing failed: ${error.message}`);
+    } finally {
+      setIsProcessing(false);
+      setProcessingStep('');
+      handleReset();
     }
   };
   
