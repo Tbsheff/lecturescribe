@@ -1,6 +1,6 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.1.3";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,67 +20,126 @@ serve(async (req) => {
       throw new Error('GEMINI_API_KEY is not set');
     }
 
-    const { audioText } = await req.json();
-    
-    if (!audioText) {
-      throw new Error('Audio text is required');
-    }
+    // Initialize Gemini API client
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+    // Use gemini-2.0-flash model which supports audio and text
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-    console.log('Processing audio text with Gemini:', audioText.substring(0, 100) + '...');
+    let { audioText, audioUrl } = await req.json();
     
-    // Call Gemini API to generate a summary
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+    let transcription = "";
+    let summaryContent = "";
+
+    // CASE 1: Process audio file if URL is provided
+    if (audioUrl) {
+      console.log('Processing audio file from URL:', audioUrl);
+      
+      // Download the audio file
+      const audioResponse = await fetch(audioUrl);
+      if (!audioResponse.ok) {
+        throw new Error(`Failed to download audio file: ${audioResponse.statusText}`);
+      }
+      
+      const audioBlob = await audioResponse.blob();
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      
+      // Convert to base64
+      const uint8Array = new Uint8Array(arrayBuffer);
+      const base64Audio = btoa(String.fromCharCode.apply(null, Array.from(uint8Array)));
+      
+      // Get the mime type or default to audio/wav
+      const mimeType = audioBlob.type || 'audio/wav';
+      
+      console.log(`Audio file downloaded. Size: ${arrayBuffer.byteLength} bytes, Type: ${mimeType}`);
+      
+      // Use Gemini to transcribe the audio and generate initial summary
+      const transcribeResult = await model.generateContent({
         contents: [
           {
+            role: "user",
             parts: [
-              {
-                text: `You are an expert in creating lecture notes from audio transcriptions. 
-                Your task is to create well-structured, comprehensive notes in markdown format from the following lecture transcript.
-                
-                Follow these guidelines:
-                1. Create a concise summary of the main topics covered (use markdown formatting)
-                2. Identify and list key points and main ideas as bullet points
-                3. Create a logical structure with sections using markdown headers (## for sections, ### for subsections)
-                4. Include any important definitions, concepts, or examples using appropriate markdown formatting
-                5. Use markdown syntax for emphasis where appropriate (*italic* for technical terms, **bold** for important concepts)
-                
-                Here is the transcript:
-                ${audioText}`
+              { 
+                inline_data: { 
+                  mime_type: mimeType,
+                  data: base64Audio 
+                }
+              },
+              { 
+                text: `You are an expert in creating lecture notes from audio transcriptions.
+
+                Please transcribe the audio file and provide a concise summary highlighting the key points.
+                Include the following:
+                1. The full transcription text
+                2. A structured set of lecture notes in markdown format
+                3. A concise summary (1-2 paragraphs)
+                4. A list of key points as bullet points
+                                  
+                Return your response as a valid JSON object with the following structure:
+                {
+                  "transcription": "the complete transcription text",
+                  "notes": "well-structured lecture notes in markdown format with ## section headers and ### subsection headers",
+                  "summary": "a concise 1-2 paragraph summary of the main topics",
+                  "keyPoints": ["key point 1", "key point 2", "key point 3", ...]
+                }
+
+                For the notes, use proper markdown formatting:
+                - ## for section headers 
+                - ### for subsection headers
+                - *italic* for technical terms
+                - **bold** for important concepts
+                - Bullet points for lists
+
+                Ensure the JSON is valid and properly formatted.
+                `
               }
             ]
           }
-        ],
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 8192,
+        ]
+      });
+
+      const responseText = await transcribeResult.response.text();
+      console.log('Gemini transcription response received');
+      
+      try {
+        // Try to parse the response as JSON
+        const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```|(\{[\s\S]*\})/);
+        const jsonContent = jsonMatch ? (jsonMatch[1] || jsonMatch[2]) : responseText;
+        
+        const parsedResponse = JSON.parse(jsonContent);
+        
+        if (parsedResponse.transcription) {
+          transcription = parsedResponse.transcription;
+          summaryContent = parsedResponse.notes || '';
+          let notes = parsedResponse.notes || '';
+          let keyPoints = parsedResponse.keyPoints || [];
+          audioText = transcription;
+        } else {
+          // Fallback to regex extraction
+          transcription = extractTranscription(responseText);
+          summaryContent = extractSummary(responseText);
+          audioText = transcription;
         }
-      })
-    });
-
-    const data = await response.json();
-    
-    if (!response.ok) {
-      console.error('Gemini API error:', data);
-      throw new Error(`Gemini API error: ${data.error?.message || 'Unknown error'}`);
+      } catch (parseError) {
+        console.error('Error parsing JSON response:', parseError);
+        // Fallback to regex extraction
+        transcription = extractTranscription(responseText);
+        summaryContent = extractSummary(responseText);
+        audioText = transcription;
+      }
     }
-
-    const summaryText = data.candidates[0]?.content?.parts[0]?.text || '';
-    console.log('Received summary from Gemini:', summaryText.substring(0, 100) + '...');
     
+
+  
+
     // Create structured summary from markdown
     const structuredSummary = {
-      summary: '', // First paragraph of the summary
-      keyPoints: [], // Bullet points of key takeaways
-      sections: [] // Detailed content with subsections
+      summary: '',
+      keyPoints: [],
+      sections: []
     };
     
     // Parse the markdown content
-    const paragraphs = summaryText.split('\n\n').filter(p => p.trim().length > 0);
+    const paragraphs = summaryContent.split('\n\n').filter(p => p.trim().length > 0);
     
     if (paragraphs.length > 0) {
       // First non-header paragraph is the summary
@@ -131,8 +190,8 @@ serve(async (req) => {
     }
 
     return new Response(JSON.stringify({ 
-      rawSummary: summaryText,
-      structuredSummary
+      transcription,
+      summary: summaryContent
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -145,3 +204,14 @@ serve(async (req) => {
     });
   }
 });
+
+// Helper functions to extract transcription and summary from Gemini response
+function extractTranscription(text: string): string {
+  const match = text.match(/TRANSCRIPTION:\s*([\s\S]*?)(?=SUMMARY:|$)/i);
+  return match ? match[1].trim() : '';
+}
+
+function extractSummary(text: string): string {
+  const match = text.match(/SUMMARY:\s*([\s\S]*)/i);
+  return match ? match[1].trim() : '';
+}
