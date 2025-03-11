@@ -53,16 +53,24 @@ export const transcribeAudio = async (audioBlob: Blob): Promise<TranscriptionRes
 // Summarize transcribed text using Gemini
 export const summarizeTranscription = async (transcriptionText: string): Promise<SummaryResult> => {
   try {
+    console.log('Sending text to Gemini for summarization:', transcriptionText);
+    
     const { data, error } = await supabase.functions.invoke('summarize-audio', {
       body: { audioText: transcriptionText }
     });
     
     if (error) {
+      console.error('Summarization error:', error);
       throw new Error(`Summarization failed: ${error.message}`);
+    }
+
+    if (!data) {
+      throw new Error('No data received from summarization');
     }
     
     return data as SummaryResult;
   } catch (error: any) {
+    console.error('Error in summarizeTranscription:', error);
     throw new Error(`Summarization failed: ${error.message}`);
   }
 };
