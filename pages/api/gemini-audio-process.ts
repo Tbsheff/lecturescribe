@@ -1,15 +1,10 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { GoogleGenerativeAI, Part } from '@google/generative-ai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import formidable from 'formidable';
 import fs from 'fs';
 
 // Initialize the Gemini API client
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-
-// Initialize OpenAI client as fallback
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
 
 // Disable the default body parser to handle form data with files
 export const config = {
@@ -42,13 +37,49 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log('Processing audio file:', audioFile.originalFilename, audioFile.mimetype, audioFile.size);
     
-    // First, use OpenAI Whisper for reliable transcription
-    console.log('Transcribing with OpenAI Whisper...');
-    const transcription = await transcribeWithWhisper(audioFile);
+    // Read the file and convert to base64
+    const fileBuffer = await fs.promises.readFile(audioFile.filepath);
+    const base64Audio = fileBuffer.toString('base64');
     
-    // Then use Gemini for summarization based on the transcription
-    console.log('Getting summary from Gemini...');
-    const summary = await summarizeWithGemini(transcription);
+    // Get the Gemini model (using gemini-1.5-pro which has multimodal capabilities)
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    
+    console.log('Requesting transcription and summary from Gemini...');
+    
+    // Create multimodal prompt for Gemini
+    const result = await model.generateContent({
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { 
+              inline_data: { 
+                mime_type: audioFile.mimetype || 'audio/wav',
+                data: base64Audio 
+              }
+            },
+            { 
+              text: `Please transcribe the audio file and then provide a concise summary highlighting the key points.
+
+Format your response exactly like this:
+
+TRANSCRIPTION:
+[The full transcription text here]
+
+SUMMARY:
+[A concise summary of the key points here]`
+            }
+          ]
+        }
+      ]
+    });
+
+    const responseText = result.response.text();
+    console.log('Gemini response received');
+    
+    // Parse the response to extract transcription and summary
+    const transcription = extractTranscription(responseText);
+    const summary = extractSummary(responseText);
     
     // Clean up temporary file
     fs.unlink(audioFile.filepath, (err) => {
@@ -67,67 +98,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 }
 
-// Use OpenAI's Whisper for reliable transcription
-async function transcribeWithWhisper(audioFile: formidable.File): Promise<string> {
-  try {
-    // Read the file buffer
-    const buffer = await fs.promises.readFile(audioFile.filepath);
-
-    
-    // Transcribe with Whisper
-    const genAI = new GoogleGenerativeAI(process.env.API_KEY);
-
-    // Initialize a Gemini model appropriate for your use case.
-    const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
-    });
-
-    // Generate content using a prompt and the metadata of the uploaded file.
-    const transcription = await model.generateContent([
-        {
-        fileData: {
-            mimeType: audioFile.file.mimeType,
-            fileUri: audioFile.file.uri
-        }
-        },
-        { text: "Generate a transcript of the speech." },
-    ]);
-    
-    console.log('Whisper transcription successful');
-    return transcription.response.text();
-  } catch (error) {
-    console.error('Whisper transcription error:', error);
-    throw new Error(`Transcription failed: ${error.message}`);
-  }
+// Helper functions to extract transcription and summary from the response
+function extractTranscription(text: string): string {
+  const match = text.match(/TRANSCRIPTION:\s*([\s\S]*?)(?=SUMMARY:|$)/i);
+  return match ? match[1].trim() : '';
 }
 
-// Use Gemini to summarize the transcription
-async function summarizeWithGemini(transcription: string): Promise<string> {
-  try {
-    // Get the Gemini model
-    const model = genAI.getGenerativeModel({
-        model: "gemini-2.0-flash",
-    });
-    
-    // Create a prompt for summarization
-    const prompt = `Please provide a concise summary of the following transcription, highlighting the key points and main ideas:
-    
-${transcription}
-    
-Create a summary that captures the essential information and can be used as lecture notes.`;
-
-    // Generate the summary
-    const result = await model.generateContent(prompt);
-    const summary = result.response.text();
-    
-    console.log('Gemini summarization successful');
-    return summary;
-  } catch (error) {
-    console.error('Gemini summarization error:', error);
-    throw new Error(`Summarization failed: ${error.message}`);
-  }
+function extractSummary(text: string): string {
+  const match = text.match(/SUMMARY:\s*([\s\S]*)/i);
+  return match ? match[1].trim() : '';
 }
-
-// These functions are no longer needed since we're using separate services
-// function extractTranscription(text: string): string { ... }
-// function extractSummary(text: string): string { ... }
