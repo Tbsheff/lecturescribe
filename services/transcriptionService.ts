@@ -5,20 +5,28 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-/**
- * Transcribe audio file using your existing transcription function
- * @param audioFile - The audio file to transcribe
- * @returns The transcription text
- */
-export async function transcribeAudio(audioFile: File): Promise<string> {
-  // ...existing code...
-  
-  // Return the transcription text
-  return transcriptionText;
-}
+// Fixed transcription text for testing
+const TEST_TRANSCRIPTION = `
+This is a sample lecture on modern computing architecture.
+The lecture covers the following topics:
+1. Introduction to CPU architecture and memory management
+2. How software interfaces with hardware components
+3. Optimization techniques for efficient computing
+4. Future trends in computing architecture
+
+In the first section, we discussed the evolution of CPU design from single-core to multi-core processors.
+Memory management has evolved from simple paging to complex virtual memory systems.
+
+The second section covered how modern operating systems provide abstraction layers between applications and hardware.
+System calls, device drivers, and kernel interfaces were explained in detail.
+
+For optimization, we discussed various algorithms including branch prediction, speculative execution, and cache optimization techniques.
+
+Finally, we looked at emerging trends like quantum computing, neuromorphic computing, and specialized AI processors.
+`;
 
 /**
- * Process audio file to get both transcription and summary
+ * Process audio file to get both transcription and summary using a single API call
  * @param audioFile - The audio file to process
  * @param userId - The user ID for database storage
  * @param metadata - Additional metadata for the note
@@ -33,13 +41,23 @@ export async function processAudioWithSummary(
   noteId: string;
 }> {
   try {
-    // Step 1: Get transcription
-    const transcription = await transcribeAudio(audioFile);
+    // Step 1: Send audio to Gemini API to get both transcription and summary
+    const formData = new FormData();
+    formData.append('audio', audioFile);
     
-    // Step 2: Get summary from Gemini API
-    const summary = await getSummaryFromGemini(transcription);
+    const response = await fetch('/api/gemini-audio-process', {
+      method: 'POST',
+      body: formData,
+    });
     
-    // Step 3: Save to database
+    if (!response.ok) {
+      throw new Error(`API error: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    const { transcription, summary } = data;
+    
+    // Step 2: Save to database
     const noteId = await saveNoteToDatabase(transcription, summary, userId, metadata);
     
     return {
@@ -49,31 +67,6 @@ export async function processAudioWithSummary(
     };
   } catch (error) {
     console.error('Error processing audio:', error);
-    throw error;
-  }
-}
-
-/**
- * Get summary of transcription text using Gemini API
- */
-async function getSummaryFromGemini(transcription: string): Promise<string> {
-  try {
-    const response = await fetch('/api/gemini-summary', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ transcription }),
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Error from Gemini API: ${response.statusText}`);
-    }
-    
-    const data = await response.json();
-    return data.summary;
-  } catch (error) {
-    console.error('Error getting summary from Gemini:', error);
     throw error;
   }
 }

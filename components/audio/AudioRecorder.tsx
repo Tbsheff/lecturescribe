@@ -93,7 +93,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
     try {
       setIsProcessing(true);
       setProcessingStep('Processing audio...');
-      setProcessingProgress(10);
+      setProcessingProgress(30);
       
       // Use our combined function to process audio
       const userId = user?.id || 'anonymous';
@@ -102,8 +102,8 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
         // Add any additional metadata here
       };
       
-      setProcessingStep('Transcribing audio...');
-      setProcessingProgress(30);
+      setProcessingStep('Analyzing with Gemini...');
+      setProcessingProgress(50);
       
       const result = await processAudioWithSummary(
         new File([audioBlob], 'recording.wav', { type: 'audio/wav' }),

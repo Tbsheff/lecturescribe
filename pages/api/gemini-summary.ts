@@ -2,7 +2,26 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Initialize the Gemini API client
-const genAI = new GoogleGenerativeAI(Deno.env.GEMINI_API_KEY!);
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+
+// Fixed summary content for testing and development
+const FIXED_SUMMARY = `
+Modern Computing Architecture Lecture Summary:
+
+Key Topics:
+- CPU architecture and memory management evolution
+- Software-hardware interface mechanisms
+- Computing optimization techniques
+- Emerging trends in computing architecture
+
+Main Points:
+1. CPU design has evolved from single-core to multi-core processors
+2. Memory management now uses complex virtual memory systems
+3. Operating systems provide abstraction layers between applications and hardware
+4. System calls, device drivers, and kernel interfaces facilitate software-hardware communication
+5. Optimization relies on branch prediction, speculative execution, and cache techniques
+6. Future trends include quantum computing, neuromorphic systems, and specialized AI processors
+`;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
