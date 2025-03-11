@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { AudioVisualizer } from './AudioVisualizer';
 import { useMicrophone } from '@/hooks/useMicrophone';
 import { toast } from 'sonner';
-import { processAudioInSupabase } from '@/services/transcription';
+import { processAudioWithSummary } from '@/services/transcription';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -84,7 +84,14 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
         
         // Step 1: Transcribe and summarize audio using Supabase
         setProcessingStep('Processing audio...');
-        const { transcription, summary, noteId } = await processAudioInSupabase(audioBlob);
+        const audioFile = new File([audioBlob], 'recording.wav', { type: 'audio/wav' });
+        const metadata = {
+          duration: recordingDuration,
+          format: 'wav',
+          size: audioBlob.size,
+          title: `Recording ${new Date().toLocaleTimeString()}`, // Set title to the current time
+        };
+        const { transcription, summary, noteId } = await processAudioWithSummary(audioFile, user.id, metadata);
         
         // Step 2: Return both the audio blob and processed data
         onAudioSaved && onAudioSaved(audioBlob);
