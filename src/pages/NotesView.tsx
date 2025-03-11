@@ -1,16 +1,14 @@
-
 import React from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Download, Copy, FileText, FilePdf } from 'lucide-react';
+import { ArrowLeft, Download, Copy, FileText } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
 const NotesView = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   
-  // This would be fetched from an API in a real application
   const dummyNote = {
     id: id || '1',
     title: 'Introduction to Quantum Computing',
@@ -58,7 +56,6 @@ const NotesView = () => {
   };
   
   const handleCopyToClipboard = () => {
-    // Create a text version of the notes
     const textContent = `
       ${dummyNote.title}
       
@@ -105,7 +102,7 @@ const NotesView = () => {
               Export as Text
             </Button>
             <Button variant="outline" className="gap-2">
-              <FilePdf className="h-4 w-4" />
+              <FileText className="h-4 w-4" />
               Export as PDF
             </Button>
           </div>
