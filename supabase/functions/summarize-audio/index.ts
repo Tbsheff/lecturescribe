@@ -7,6 +7,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Default empty response to ensure we never return sample text
+const EMPTY_RESPONSE = {
+  transcription: "",
+  summary: ""
+};
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -104,32 +110,55 @@ serve(async (req) => {
         // Try to parse the response as JSON
         const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```|(\{[\s\S]*\})/);
         const jsonContent = jsonMatch ? (jsonMatch[1] || jsonMatch[2]) : responseText;
+
+        // Log the extracted JSON content for debugging
+        console.log('Extracted JSON content:', jsonContent.substring(0, 200) + '...');
         
-        const parsedResponse = JSON.parse(jsonContent);
-        
-        if (parsedResponse.transcription) {
-          transcription = parsedResponse.transcription;
-          summaryContent = parsedResponse.notes || '';
-          let notes = parsedResponse.notes || '';
-          let keyPoints = parsedResponse.keyPoints || [];
+        try {
+          const parsedResponse = JSON.parse(jsonContent);
+          
+          if (parsedResponse.transcription && typeof parsedResponse.transcription === 'string' && parsedResponse.transcription.trim().length > 0) {
+            transcription = parsedResponse.transcription;
+            summaryContent = parsedResponse.notes || '';
+            audioText = transcription;
+            
+            // Log success for debugging
+            console.log('Successfully parsed JSON response with valid transcription');
+          } else {
+            // If transcription is missing or empty, use more robust extraction
+            console.log('Transcription missing or empty in parsed JSON, trying regex extraction');
+            transcription = extractTranscriptionBetter(responseText);
+            summaryContent = extractSummaryBetter(responseText);
+            audioText = transcription;
+            
+            // If extraction still yields no results, throw error to prevent saving empty data
+            if (!transcription.trim()) {
+              throw new Error('Failed to extract transcription from response');
+            }
+          }
+        } catch (jsonParseError) {
+          console.error('Error parsing JSON string:', jsonParseError);
+          // Try regex extraction
+          transcription = extractTranscriptionBetter(responseText);
+          summaryContent = extractSummaryBetter(responseText);
           audioText = transcription;
-        } else {
-          // Fallback to regex extraction
-          transcription = extractTranscription(responseText);
-          summaryContent = extractSummary(responseText);
-          audioText = transcription;
+          
+          // If extraction yields no results, throw error
+          if (!transcription.trim()) {
+            throw new Error('Failed to extract transcription from response');
+          }
         }
       } catch (parseError) {
-        console.error('Error parsing JSON response:', parseError);
-        // Fallback to regex extraction
-        transcription = extractTranscription(responseText);
-        summaryContent = extractSummary(responseText);
-        audioText = transcription;
+        console.error('Error with response parsing:', parseError);
+        throw new Error('Failed to process response from transcription API');
       }
     }
     
-
-  
+    // Verify we have actual content before continuing
+    if (!transcription.trim() || transcription.trim().length < 10) {
+      console.error('Insufficient transcription content');
+      throw new Error('Unable to extract meaningful transcription from the audio');
+    }
 
     // Create structured summary from markdown
     const structuredSummary = {
@@ -189,6 +218,15 @@ serve(async (req) => {
       });
     }
 
+    // Final verification that we're not returning empty content
+    if (!transcription.trim()) {
+      console.error('Empty transcription after processing');
+      return new Response(JSON.stringify(EMPTY_RESPONSE), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     return new Response(JSON.stringify({ 
       transcription,
       summary: summaryContent
@@ -198,14 +236,75 @@ serve(async (req) => {
     
   } catch (error) {
     console.error('Error in summarize-audio function:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ 
+      error: error.message,
+      ...EMPTY_RESPONSE  // Include empty response to prevent any default content
+    }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 });
 
-// Helper functions to extract transcription and summary from Gemini response
+// Helper functions with improved extraction logic
+function extractTranscriptionBetter(text: string): string {
+  // Look for various patterns that might indicate the transcription section
+  const patterns = [
+    /transcription[:\s]*["']?([\s\S]*?)["']?(?=(?:notes|summary|key\s*points)[:\s]*["']?|$)/i,
+    /["']transcription["'][:\s]*["']?([\s\S]*?)["']?(?=["'](?:notes|summary|key\s*points)["'][:\s]*["']?|$)/i,
+    /transcript[:\s]*["']?([\s\S]*?)["']?(?=(?:notes|summary|key\s*points)[:\s]*["']?|$)/i,
+    /"transcript"[:\s]*"([\s\S]*?)"(?=,|$)/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match && match[1] && match[1].trim().length > 0) {
+      return match[1].trim();
+    }
+  }
+
+  // If all patterns fail, try to extract any substantial text block
+  const textBlocks = text.split(/\n\n+/).filter(block => 
+    block.trim().length > 100 && 
+    !block.trim().startsWith('#') && 
+    !block.includes('```')
+  );
+  
+  if (textBlocks.length > 0) {
+    return textBlocks[0].trim();
+  }
+
+  // Last resort - return empty string, never default sample content
+  return '';
+}
+
+function extractSummaryBetter(text: string): string {
+  // Try to find a section marked as summary or notes
+  const patterns = [
+    /(?:summary|notes)[:\s]*["']?([\s\S]*?)["']?(?=(?:transcription|key\s*points)[:\s]*["']?|$)/i,
+    /["'](?:summary|notes)["'][:\s]*["']?([\s\S]*?)["']?(?=["'](?:transcription|key\s*points)["'][:\s]*["']?|$)/i,
+    /## summary\s+([\s\S]*?)(?=##|$)/i,
+    /## notes\s+([\s\S]*?)(?=##|$)/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match && match[1] && match[1].trim().length > 0) {
+      return match[1].trim();
+    }
+  }
+
+  // Look for markdown-formatted sections
+  const sections = text.match(/##[^#](.*?)(?=##[^#]|$)/gs);
+  if (sections && sections.length > 0) {
+    return sections.join('\n\n');
+  }
+
+  // Return empty string if no summary found
+  return '';
+}
+
+// Legacy functions - kept for reference but no longer used directly
 function extractTranscription(text: string): string {
   const match = text.match(/TRANSCRIPTION:\s*([\s\S]*?)(?=SUMMARY:|$)/i);
   return match ? match[1].trim() : '';

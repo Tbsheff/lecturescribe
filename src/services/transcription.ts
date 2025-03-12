@@ -42,14 +42,38 @@ export const processAudioWithSummary = async (
   }
 };
 
-export const transcribeAudio = async (audioFile: File): Promise<string> => {
+// Fixed to match how it's used in AudioUploader
+export const transcribeAudio = async (audioFile: File): Promise<{ text: string }> => {
   try {
     // Upload to Supabase storage and get transcription
     const { transcription } = await processAudioInSupabase(audioFile);
-    return transcription;
+    return { text: transcription };
   } catch (error) {
     console.error('Transcription error:', error);
     throw new Error('Failed to transcribe audio');
+  }
+};
+
+// Function to summarize text transcription
+export const summarizeTranscription = async (text: string) => {
+  try {
+    // Call the Supabase function with the text
+    const { data, error } = await supabase.functions.invoke('summarize-audio', {
+      body: { audioText: text }
+    });
+    
+    if (error) {
+      console.error('Summarization error:', error);
+      throw new Error('Failed to summarize transcription');
+    }
+    
+    return {
+      transcription: text,
+      summary: data.summary
+    };
+  } catch (error) {
+    console.error('Summarization error:', error);
+    throw new Error('Failed to summarize transcription');
   }
 };
 
@@ -100,5 +124,3 @@ export async function processAudioInSupabase(audioFile: File): Promise<{ transcr
     fileUrl: publicUrl
   };
 }
-
-module.exports = { transcribeAudio, processAudioWithSummary };

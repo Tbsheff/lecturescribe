@@ -1,7 +1,6 @@
-
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Rocket, Settings, Moon, Sun, LogOut } from 'lucide-react';
+import { Home, Rocket, Settings, Moon, Sun, LogOut, Headphones } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/hooks/useTheme';
@@ -14,6 +13,7 @@ export const Sidebar = () => {
   
   const navItems = [
     { name: 'Home', icon: <Home className="h-5 w-5" />, path: '/' },
+    { name: 'Audio Upload', icon: <Headphones className="h-5 w-5" />, path: '/audio-summary' },
     { name: 'How to use', icon: <Rocket className="h-5 w-5" />, path: '/how-to-use' },
     { name: 'Settings', icon: <Settings className="h-5 w-5" />, path: '/settings' },
   ];
