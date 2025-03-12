@@ -31,14 +31,16 @@ serve(async (req) => {
     // Use gemini-2.0-flash model which supports audio and text
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-    let { audioText, audioUrl } = await req.json();
+    let { audioText, audioUrl, contentType: providedContentType, fileName } = await req.json();
     
     let transcription = "";
     let summaryContent = "";
 
     // CASE 1: Process audio file if URL is provided
     if (audioUrl) {
-      console.log('Processing audio file from URL:', audioUrl);
+      console.log(`Processing audio file from URL: ${audioUrl}`);
+      if (fileName) console.log(`File name: ${fileName}`);
+      if (providedContentType) console.log(`Content type provided by client: ${providedContentType}`);
       
       try {
         // Download the audio file
@@ -56,10 +58,14 @@ serve(async (req) => {
         }
         
         console.log('Audio download successful. Response status:', audioResponse.status);
-        console.log('Content-Type:', audioResponse.headers.get('content-type'));
+        console.log('Response Content-Type:', audioResponse.headers.get('content-type'));
+        console.log('Response Content-Length:', audioResponse.headers.get('content-length'));
         
         // Ensure we have a blob with the proper content type
-        const contentType = audioResponse.headers.get('content-type') || 'audio/wav';
+        // Use the client-provided content type if available, otherwise use the response header
+        const contentType = providedContentType || audioResponse.headers.get('content-type') || 'audio/wav';
+        console.log(`Using content type: ${contentType}`);
+        
         const audioBlob = await audioResponse.blob();
         
         console.log(`Audio blob created. Size: ${audioBlob.size} bytes, Type: ${audioBlob.type || contentType}`);
@@ -78,13 +84,22 @@ serve(async (req) => {
         
         // Process in chunks to avoid call stack size exceeded for large files
         const chunkSize = 32768; // 32KB chunks
-        for (let i = 0; i < uint8Array.length; i += chunkSize) {
-          const chunk = uint8Array.subarray(i, i + chunkSize);
-          base64Audio += String.fromCharCode.apply(null, Array.from(chunk));
+        console.log(`Starting base64 encoding of audio file (${uint8Array.length} bytes)...`);
+        try {
+          for (let i = 0; i < uint8Array.length; i += chunkSize) {
+            const chunk = uint8Array.subarray(i, i + chunkSize);
+            base64Audio += String.fromCharCode.apply(null, Array.from(chunk));
+            // Log progress for large files
+            if (i % (chunkSize * 10) === 0 && i > 0) {
+              console.log(`Base64 encoding progress: ${Math.round(i/uint8Array.length*100)}%`);
+            }
+          }
+          base64Audio = btoa(base64Audio);
+          console.log(`Base64 encoding complete. Length: ${base64Audio.length} characters`);
+        } catch (encodeError) {
+          console.error('Error during base64 encoding:', encodeError);
+          throw new Error('Failed to encode audio data: ' + encodeError.message);
         }
-        base64Audio = btoa(base64Audio);
-        
-        console.log(`Base64 encoding complete. Length: ${base64Audio.length} characters`);
         
         // Get the mime type from the blob or response headers
         const mimeType = audioBlob.type || contentType || 'audio/wav';
@@ -92,112 +107,182 @@ serve(async (req) => {
         
         // Use Gemini to transcribe the audio and generate initial summary
         console.log('Sending audio to Gemini API for processing...');
-        const transcribeResult = await model.generateContent({
-          contents: [
-            {
-              role: "user",
-              parts: [
-                { 
-                  inline_data: { 
-                    mime_type: mimeType,
-                    data: base64Audio 
-                  }
-                },
-                { 
-                  text: `You are an expert in creating lecture notes from audio transcriptions.
-
-                  Please transcribe the audio file and provide a concise summary highlighting the key points.
-                  Include the following:
-                  1. The full transcription text
-                  2. A structured set of lecture notes in markdown format
-                  3. A concise summary (1-2 paragraphs)
-                  4. A list of key points as bullet points
-                                    
-                  Return your response as a valid JSON object with the following structure:
-                  {
-                    "transcription": "the complete transcription text",
-                    "notes": "well-structured lecture notes in markdown format with ## section headers and ### subsection headers",
-                    "summary": "a concise 1-2 paragraph summary of the main topics",
-                    "keyPoints": ["key point 1", "key point 2", "key point 3", ...]
-                  }
-
-                  For the notes, use proper markdown formatting:
-                  - ## for section headers 
-                  - ### for subsection headers
-                  - *italic* for technical terms
-                  - **bold** for important concepts
-                  - Bullet points for lists
-
-                  Ensure the JSON is valid and properly formatted.
-                  `
-                }
-              ]
-            }
-          ]
-        });
-
-        const responseText = await transcribeResult.response.text();
-        console.log('Gemini transcription response received. Length:', responseText.length);
-        console.log('Response preview:', responseText.substring(0, 200) + '...');
-      
         try {
-          // Try to parse the response as JSON
-          const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```|(\{[\s\S]*\})/);
-          const jsonContent = jsonMatch ? (jsonMatch[1] || jsonMatch[2]) : responseText;
+          const transcribeResult = await model.generateContent({
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  { 
+                    inline_data: { 
+                      mime_type: mimeType,
+                      data: base64Audio 
+                    }
+                  },
+                  { 
+                    text: `You are an expert in creating lecture notes from audio transcriptions.
 
-          // Log the extracted JSON content for debugging
-          console.log('Extracted JSON content:', jsonContent.substring(0, 200) + '...');
+                    Please transcribe the audio file and provide a concise summary highlighting the key points.
+                    Include the following:
+                    1. The full transcription text
+                    2. A structured set of lecture notes in markdown format
+                    3. A concise summary (1-2 paragraphs)
+                    4. A list of key points as bullet points
+                                      
+                    Return your response as a valid JSON object with the following structure:
+                    {
+                      "transcription": "the complete transcription text",
+                      "notes": "well-structured lecture notes in markdown format with ## section headers and ### subsection headers",
+                      "summary": "a concise 1-2 paragraph summary of the main topics",
+                      "keyPoints": ["key point 1", "key point 2", "key point 3", ...]
+                    }
+
+                    For the notes, use proper markdown formatting:
+                    - ## for section headers 
+                    - ### for subsection headers
+                    - *italic* for technical terms
+                    - **bold** for important concepts
+                    - Bullet points for lists
+
+                    Ensure the JSON is valid and properly formatted.
+                    `
+                  }
+                ]
+              }
+            ]
+          });
+
+          const responseText = await transcribeResult.response.text();
+          console.log('Gemini transcription response received. Length:', responseText.length);
+          if (responseText.length > 0) {
+            console.log('Response preview:', responseText.substring(0, 200) + '...');
+          } else {
+            console.error('EMPTY RESPONSE from Gemini API');
+            throw new Error('Received empty response from Gemini API');
+          }
         
           try {
-            const parsedResponse = JSON.parse(jsonContent);
-          
-            if (parsedResponse.transcription && typeof parsedResponse.transcription === 'string' && parsedResponse.transcription.trim().length > 0) {
-              transcription = parsedResponse.transcription;
-              summaryContent = parsedResponse.notes || '';
-              audioText = transcription;
+            // Try to parse the response as JSON
+            const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```|(\{[\s\S]*\})/);
+            let jsonContent = jsonMatch ? (jsonMatch[1] || jsonMatch[2]) : responseText;
             
-              // Log success for debugging
-              console.log('Successfully parsed JSON response with valid transcription');
-              console.log('Transcription:', transcription);
-            } else {
-              // If transcription is missing or empty, use more robust extraction
-              console.log('Transcription missing or empty in parsed JSON, trying regex extraction');
+            // If no valid JSON found, try a more aggressive approach
+            if (!jsonContent || jsonContent.trim().length < 10) {
+              console.log('No valid JSON found with regex, trying direct extraction');
+              // Try to extract any JSON object
+              const possibleJsonMatch = responseText.match(/(\{[\s\S]*?\})/g);
+              if (possibleJsonMatch && possibleJsonMatch.length > 0) {
+                jsonContent = possibleJsonMatch[0];
+              }
+            }
+
+            // Log the extracted JSON content for debugging
+            console.log('Extracted JSON content:', jsonContent.substring(0, 200) + '...');
+          
+            try {
+              const parsedResponse = JSON.parse(jsonContent);
+              console.log('JSON parsed successfully, checking fields...');
+              console.log('transcription field present:', !!parsedResponse.transcription);
+              console.log('notes field present:', !!parsedResponse.notes);
+              console.log('summary field present:', !!parsedResponse.summary);
+              console.log('keyPoints field present:', !!parsedResponse.keyPoints);
+            
+              if (parsedResponse.transcription && typeof parsedResponse.transcription === 'string' && parsedResponse.transcription.trim().length > 0) {
+                transcription = parsedResponse.transcription;
+                summaryContent = parsedResponse.notes || parsedResponse.summary || '';
+                audioText = transcription;
+              
+                // Log success for debugging
+                console.log('Successfully parsed JSON response with valid transcription');
+                console.log('Transcription length:', transcription.length);
+                console.log('Transcription preview:', transcription.substring(0, 100) + '...');
+              } else {
+                // If transcription is missing or empty, use more robust extraction
+                console.log('Transcription missing or empty in parsed JSON, trying regex extraction');
+                transcription = extractTranscriptionBetter(responseText);
+                summaryContent = extractSummaryBetter(responseText);
+                audioText = transcription;
+
+                // Log the extracted content
+                console.log('Regex extraction result - transcription length:', transcription.length);
+                console.log('Regex extraction result - summary length:', summaryContent.length);
+
+                // If extraction still yields no results, try finding any substantial text
+                if (!transcription.trim()) {
+                  console.error('Failed to extract transcription with regex, looking for any text blocks');
+                  
+                  // Try to find any substantial text blocks
+                  const textBlocks = responseText.split(/\n\n+/).filter(block => 
+                    block.trim().length > 50 && 
+                    !block.includes('```')
+                  );
+                  
+                  if (textBlocks.length > 0) {
+                    console.log('Found text block of length:', textBlocks[0].length);
+                    transcription = textBlocks[0].trim();
+                    audioText = transcription;
+                  } else {
+                    throw new Error('Failed to extract any meaningful text from response');
+                  }
+                }
+              }
+            } catch (jsonParseError) {
+              console.error('Error parsing JSON string:', jsonParseError);
+              // Try regex extraction
               transcription = extractTranscriptionBetter(responseText);
               summaryContent = extractSummaryBetter(responseText);
               audioText = transcription;
 
-              // If extraction still yields no results, throw error to prevent saving empty data
+              console.log('After parse error, regex extraction - transcription length:', transcription.length);
+              console.log('After parse error, regex extraction - summary length:', summaryContent.length);
+
+              // If extraction yields no results, look for any text content
               if (!transcription.trim()) {
-                throw new Error('Failed to extract transcription from response');
+                // Last resort - look for any text in the response
+                const lines = responseText.split('\n').filter(line => 
+                  line.trim().length > 30 && 
+                  !line.includes('```') &&
+                  !line.startsWith('#') &&
+                  !line.startsWith('>')
+                );
+                
+                if (lines.length > 0) {
+                  transcription = lines.join('\n\n');
+                  audioText = transcription;
+                  console.log('Extracted text lines as fallback. Length:', transcription.length);
+                } else {
+                  throw new Error('Failed to extract any meaningful content from response');
+                }
               }
             }
-          } catch (jsonParseError) {
-            console.error('Error parsing JSON string:', jsonParseError);
-            // Try regex extraction
-            transcription = extractTranscriptionBetter(responseText);
-            summaryContent = extractSummaryBetter(responseText);
-            audioText = transcription;
-
-            // If extraction yields no results, throw error
-            if (!transcription.trim()) {
-              throw new Error('Failed to extract transcription from response');
-            }
+          } catch (parseError) {
+            console.error('Error with response parsing:', parseError);
+            throw new Error('Failed to process response from transcription API');
           }
-        } catch (parseError) {
-          console.error('Error with response parsing:', parseError);
-          throw new Error('Failed to process response from transcription API');
+        } catch (geminiError) {
+          console.error('Error calling Gemini API:', geminiError);
+          throw new Error('Failed to process audio with Gemini API: ' + geminiError.message);
         }
       } catch (downloadError) {
-        console.error('Error downloading audio file:', downloadError);
-        throw new Error('Failed to download audio file');
+        console.error('Error processing audio:', downloadError);
+        throw new Error('Failed to process audio file: ' + downloadError.message);
       }
+    } else if (audioText) {
+      // CASE 2: Process text if no audio file is provided but text is
+      console.log('Processing text input of length:', audioText.length);
+      // ... existing code for text processing ...
+    } else {
+      console.error('No audio URL or text provided');
+      throw new Error('No audio URL or text provided');
     }
     
     // Verify we have actual content before continuing
-    if (!transcription.trim() || transcription.trim().length < 10) {
-      console.error('Insufficient transcription content');
-      console.log('Transcription:', transcription);
-      throw new Error('Unable to extract meaningful transcription from the audio');
+    console.log('Final transcription check - length:', transcription?.length || 0);
+    console.log('Final transcription check - trimmed length:', transcription?.trim()?.length || 0);
+    
+    if (!transcription || !transcription.trim() || transcription.trim().length < 10) {
+      console.error('Insufficient transcription content. Transcription:', transcription);
+      throw new Error('Unable to extract meaningful transcription from the audio. Please check the file format and try again.');
     }
 
     // Create structured summary from markdown

@@ -92,44 +92,69 @@ export async function processAudioInSupabase(audioFile: File): Promise<{ transcr
     lastModified: new Date(audioFile.lastModified).toISOString()
   });
 
+  // Check if file type is supported
+  const supportedTypes = ['audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/mp4', 'audio/x-m4a', 'audio/webm'];
+  let contentType = audioFile.type;
+  
+  // If type is not explicitly supported, try to determine from extension
+  if (!supportedTypes.includes(contentType)) {
+    const extension = audioFile.name.split('.').pop()?.toLowerCase() || '';
+    if (extension === 'wav' || extension === 'wave') contentType = 'audio/wav';
+    else if (extension === 'mp3') contentType = 'audio/mpeg';
+    else if (extension === 'm4a') contentType = 'audio/x-m4a';
+    else if (extension === 'mp4') contentType = 'audio/mp4';
+    else if (extension === 'webm') contentType = 'audio/webm';
+    else contentType = 'audio/wav'; // Default to WAV if unknown
+    
+    console.log(`File MIME type ${audioFile.type} not explicitly supported, using ${contentType} based on extension`);
+  }
+
   // Generate a unique filename
-  const fileExtension = audioFile.name.split('.').pop() || 'wav';
+  const fileExtension = audioFile.name.split('.').pop()?.toLowerCase() || 'wav';
   const filename = `audio_${Date.now()}.${fileExtension}`;
   const filePath = `temp_audio/${filename}`;
-
-  // Ensure the correct MIME type is specified
-  const contentType = audioFile.type || 'audio/wav';
   
   console.log(`Uploading file to Supabase storage: ${filePath} (${contentType})`);
   
-  // 1. Upload the file to Supabase Storage
-  const { data: uploadData, error: uploadError } = await supabase.storage
-    .from('audio_uploads')
-    .upload(filePath, audioFile, {
-      contentType: contentType,
-      cacheControl: '3600',
-      upsert: false
-    });
-
-  if (uploadError) {
-    console.error('Error uploading file to Supabase storage:', uploadError);
-    throw new Error(`Failed to upload audio file: ${uploadError.message}`);
-  }
-
-  console.log('File uploaded successfully:', uploadData);
-
-  // 2. Get a public URL for the file
-  const { data: { publicUrl } } = supabase.storage
-    .from('audio_uploads')
-    .getPublicUrl(filePath);
-
-  console.log('Generated public URL:', publicUrl);
-
   try {
+    // 1. Upload the file to Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('audio_uploads')
+      .upload(filePath, audioFile, {
+        contentType: contentType,
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (uploadError) {
+      console.error('Error uploading file to Supabase storage:', uploadError);
+      throw new Error(`Failed to upload audio file: ${uploadError.message}`);
+    }
+
+    console.log('File uploaded successfully:', uploadData);
+
+    // 2. Get a public URL for the file
+    const { data: { publicUrl } } = supabase.storage
+      .from('audio_uploads')
+      .getPublicUrl(filePath);
+
+    console.log('Generated public URL:', publicUrl);
+
     // 3. Call the Supabase function with the file URL
     console.log('Calling Supabase function with audio URL');
+    const response = await fetch(publicUrl, { method: 'HEAD' });
+    console.log('Audio file HEAD check:', { 
+      status: response.status, 
+      contentType: response.headers.get('content-type'),
+      contentLength: response.headers.get('content-length')
+    });
+
     const { data, error } = await supabase.functions.invoke('summarize-audio', {
-      body: { audioUrl: publicUrl }
+      body: { 
+        audioUrl: publicUrl,
+        contentType: contentType, // Pass the content type explicitly
+        fileName: filename // Pass the filename for reference
+      }
     });
 
     if (error) {
@@ -140,22 +165,26 @@ export async function processAudioInSupabase(audioFile: File): Promise<{ transcr
     }
 
     console.log('Audio processing successful, received response:', {
-      transcriptionLength: data?.transcription?.length,
-      summaryLength: data?.summary?.length
+      transcriptionLength: data?.transcription?.length || 0,
+      summaryLength: data?.summary?.length || 0
     });
 
     // 4. Clean up the uploaded file
-    await supabase.storage.from('audio_uploads').remove([filePath]);
-    console.log('Temporary audio file removed from storage');
+    try {
+      await supabase.storage.from('audio_uploads').remove([filePath]);
+      console.log('Temporary audio file removed from storage');
+    } catch (cleanupError) {
+      console.warn('Could not clean up temporary file, will expire automatically:', cleanupError);
+    }
 
     // Validate the response
-    if (!data.transcription || !data.summary) {
+    if (!data || !data.transcription) {
       throw new Error('Invalid response from audio processing service');
     }
 
     return {
-      transcription: data.transcription,
-      summary: data.summary,
+      transcription: data.transcription || '',
+      summary: data.summary || '',
       fileUrl: publicUrl
     };
   } catch (error) {
