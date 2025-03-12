@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { Upload, File, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -19,23 +18,42 @@ export const AudioUploader: React.FC<AudioUploaderProps> = ({
   const [processingStep, setProcessingStep] = useState<string>('');
   const inputRef = useRef<HTMLInputElement>(null);
   
+  // Validate audio file format
+  const validateAudioFile = (file: File): boolean => {
+    // Check file type
+    const validTypes = ['audio/wav', 'audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/x-m4a', 'audio/webm'];
+    if (!file.type.startsWith('audio/') || !validTypes.some(type => file.type === type || file.type.startsWith(type))) {
+      toast.error(`Invalid file format: ${file.type}. Please upload a supported audio file (MP3, WAV, M4A, etc.)`);
+      return false;
+    }
+    
+    // Check file size (max 100MB)
+    if (file.size > 100 * 1024 * 1024) {
+      toast.error('File is too large. Maximum size is 100MB');
+      return false;
+    }
+
+    // Check if file is not empty
+    if (file.size === 0) {
+      toast.error('Audio file is empty');
+      return false;
+    }
+    
+    return true;
+  };
+  
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
       
-      // Check file type
-      if (!selectedFile.type.startsWith('audio/')) {
-        toast.error('Please upload an audio file');
-        return;
+      if (validateAudioFile(selectedFile)) {
+        console.log('Audio file selected:', {
+          name: selectedFile.name,
+          type: selectedFile.type,
+          size: selectedFile.size
+        });
+        setFile(selectedFile);
       }
-      
-      // Check file size (max 100MB)
-      if (selectedFile.size > 100 * 1024 * 1024) {
-        toast.error('File is too large. Maximum size is 100MB');
-        return;
-      }
-      
-      setFile(selectedFile);
     }
   };
   
@@ -55,17 +73,14 @@ export const AudioUploader: React.FC<AudioUploaderProps> = ({
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const droppedFile = e.dataTransfer.files[0];
       
-      if (!droppedFile.type.startsWith('audio/')) {
-        toast.error('Please upload an audio file');
-        return;
+      if (validateAudioFile(droppedFile)) {
+        console.log('Audio file dropped:', {
+          name: droppedFile.name, 
+          type: droppedFile.type,
+          size: droppedFile.size
+        });
+        setFile(droppedFile);
       }
-      
-      if (droppedFile.size > 100 * 1024 * 1024) {
-        toast.error('File is too large. Maximum size is 100MB');
-        return;
-      }
-      
-      setFile(droppedFile);
     }
   };
   
@@ -75,17 +90,26 @@ export const AudioUploader: React.FC<AudioUploaderProps> = ({
         setIsProcessing(true);
         
         // Step 1: Transcribe audio
-        setProcessingStep('Transcribing audio...');
+        setProcessingStep('Uploading and transcribing audio...');
+        console.log('Starting audio transcription process...');
+        
         const transcription = await transcribeAudio(file);
+        console.log('Transcription completed:', { 
+          textLength: transcription.text.length,
+          preview: transcription.text.substring(0, 100) + '...' 
+        });
         
         // Step 2: Summarize using Gemini
         setProcessingStep('Generating AI summary...');
+        console.log('Starting summarization process...');
+        
         const summary = await summarizeTranscription(transcription.text);
+        console.log('Summary generated successfully');
         
         // Step 3: Return the file and processed data
         onAudioUploaded(file);
         
-        // Save in localStorage for demo purposes (in a real app, this would go to Supabase)
+        // Save in localStorage for demo purposes
         localStorage.setItem('lastSummary', JSON.stringify(summary));
         
         toast.success('Audio processed successfully with AI');
@@ -94,12 +118,14 @@ export const AudioUploader: React.FC<AudioUploaderProps> = ({
           inputRef.current.value = '';
         }
       } catch (error: any) {
-        console.error('Processing error:', error);
-        toast.error(`Processing failed: ${error.message}`);
+        console.error('Audio processing error:', error);
+        toast.error(`Processing failed: ${error.message || 'Unknown error occurred'}`);
       } finally {
         setIsProcessing(false);
         setProcessingStep('');
       }
+    } else {
+      toast.error('Please select an audio file first');
     }
   };
   
@@ -152,7 +178,7 @@ export const AudioUploader: React.FC<AudioUploaderProps> = ({
               ref={inputRef}
               type="file"
               className="hidden"
-              accept="audio/*"
+              accept="audio/mp3,audio/mpeg,audio/wav,audio/x-m4a,audio/mp4,audio/webm"
               onChange={handleFileChange}
             />
           </div>
@@ -165,7 +191,7 @@ export const AudioUploader: React.FC<AudioUploaderProps> = ({
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{file.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  {formatFileSize(file.size)}
+                  {formatFileSize(file.size)} • {file.type || 'audio file'}
                 </p>
               </div>
               <Button

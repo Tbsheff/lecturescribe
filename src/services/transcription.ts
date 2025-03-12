@@ -79,48 +79,91 @@ export const summarizeTranscription = async (text: string) => {
 
 // Helper function to process audio in Supabase
 export async function processAudioInSupabase(audioFile: File): Promise<{ transcription: string; summary: string; fileUrl: string }> {
+  // Validate the audio file
+  if (!audioFile || !audioFile.size) {
+    console.error('Invalid audio file:', audioFile);
+    throw new Error('Invalid or empty audio file');
+  }
+
+  console.log('Processing audio file:', {
+    name: audioFile.name,
+    type: audioFile.type,
+    size: audioFile.size,
+    lastModified: new Date(audioFile.lastModified).toISOString()
+  });
+
   // Generate a unique filename
-  const filename = `audio_${Date.now()}.${audioFile.name.split('.').pop()}`;
+  const fileExtension = audioFile.name.split('.').pop() || 'wav';
+  const filename = `audio_${Date.now()}.${fileExtension}`;
   const filePath = `temp_audio/${filename}`;
 
+  // Ensure the correct MIME type is specified
+  const contentType = audioFile.type || 'audio/wav';
+  
+  console.log(`Uploading file to Supabase storage: ${filePath} (${contentType})`);
+  
   // 1. Upload the file to Supabase Storage
   const { data: uploadData, error: uploadError } = await supabase.storage
     .from('audio_uploads')
     .upload(filePath, audioFile, {
-      contentType: audioFile.type,
+      contentType: contentType,
       cacheControl: '3600',
+      upsert: false
     });
 
   if (uploadError) {
-    console.error('Error uploading file:', uploadError);
-    throw new Error('Failed to upload audio file');
+    console.error('Error uploading file to Supabase storage:', uploadError);
+    throw new Error(`Failed to upload audio file: ${uploadError.message}`);
   }
+
+  console.log('File uploaded successfully:', uploadData);
 
   // 2. Get a public URL for the file
   const { data: { publicUrl } } = supabase.storage
     .from('audio_uploads')
     .getPublicUrl(filePath);
 
-  // 3. Call the Supabase function with the file URL
-  const { data, error } = await supabase.functions.invoke('summarize-audio', {
-    body: { audioUrl: publicUrl }
-  });
+  console.log('Generated public URL:', publicUrl);
 
-  if (error) {
-    console.error('Supabase function error:', error);
-    
-    // Clean up the uploaded file
+  try {
+    // 3. Call the Supabase function with the file URL
+    console.log('Calling Supabase function with audio URL');
+    const { data, error } = await supabase.functions.invoke('summarize-audio', {
+      body: { audioUrl: publicUrl }
+    });
+
+    if (error) {
+      console.error('Supabase function error:', error);
+      // Clean up the uploaded file
+      await supabase.storage.from('audio_uploads').remove([filePath]);
+      throw new Error(`Failed to process audio with Supabase function: ${error.message}`);
+    }
+
+    console.log('Audio processing successful, received response:', {
+      transcriptionLength: data?.transcription?.length,
+      summaryLength: data?.summary?.length
+    });
+
+    // 4. Clean up the uploaded file
     await supabase.storage.from('audio_uploads').remove([filePath]);
-    
-    throw new Error('Failed to process audio with Supabase function');
+    console.log('Temporary audio file removed from storage');
+
+    // Validate the response
+    if (!data.transcription || !data.summary) {
+      throw new Error('Invalid response from audio processing service');
+    }
+
+    return {
+      transcription: data.transcription,
+      summary: data.summary,
+      fileUrl: publicUrl
+    };
+  } catch (error) {
+    console.error('Error during audio processing:', error);
+    // Make sure to clean up even if there was an error
+    await supabase.storage.from('audio_uploads').remove([filePath]).catch(e => {
+      console.error('Error cleaning up file after processing error:', e);
+    });
+    throw error;
   }
-
-  // 4. Clean up the uploaded file (optional - you may want to keep it)
-  await supabase.storage.from('audio_uploads').remove([filePath]);
-
-  return {
-    transcription: data.transcription,
-    summary: data.summary,
-    fileUrl: publicUrl
-  };
 }
