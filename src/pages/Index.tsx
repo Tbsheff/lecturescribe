@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Navigate } from 'react-router-dom'; // ADDED Navigate import
+import { useNavigate, Navigate } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AudioInputCard } from '@/components/ui/AudioInputCard';
@@ -19,19 +19,17 @@ type InputMethod = 'record' | 'upload' | 'url';
 
 const Index = () => {
   const navigate = useNavigate();
-  const { user, loading } = useAuth(); // Get loading state
+  const { user, loading } = useAuth();
   const [inputMethod, setInputMethod] = useState<InputMethod>('record');
   const [notes, setNotes] = useState<Note[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  // Enforce authentication
-  if (!loading && !user) { // Check loading and user
+  if (!loading && !user) {
     return <Navigate to="/auth" />;
   }
 
-  // Fetch notes when user changes or refreshTrigger changes
   useEffect(() => {
     const loadNotes = async () => {
       if (!user) {
@@ -43,7 +41,6 @@ const Index = () => {
         setIsLoading(true);
         const fetchedNotes = await fetchNotes();
 
-        // Convert to Note format
         const formattedNotes: Note[] = fetchedNotes.map((note: any) => ({
           id: note.id,
           title: note.title,
@@ -63,8 +60,8 @@ const Index = () => {
     loadNotes();
   }, [user, refreshTrigger]);
 
-  const handleNoteClick = (id: string) => {
-    navigate(`/notes/${id}`);
+  const handleNoteClick = (noteId: string) => {
+    navigate(`/notes/${noteId}`);
   };
 
   const handleUrlSubmit = () => {
@@ -127,10 +124,10 @@ const Index = () => {
           )}
 
           {inputMethod === 'upload' && (
-            <AudioUploader onAudioUploaded={(noteId) => { // Modified prop to handle noteId
+            <AudioUploader onAudioUploaded={(noteId) => {
               toast.info("File upload processing is in progress...");
               if (noteId) {
-                navigate(`/notes/${noteId}`); // Navigate on successful upload and processing
+                navigate(`/notes/${noteId}`);
               }
             }} />
           )}

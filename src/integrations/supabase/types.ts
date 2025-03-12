@@ -12,32 +12,32 @@ export type Database = {
       notes: {
         Row: {
           audio_url: string | null
-          content: string | null
           created_at: string
           id: string
           raw_summary: string | null
           structured_summary: Json | null
           title: string
+          transcription: string | null
           user_id: string
         }
         Insert: {
           audio_url?: string | null
-          content?: string | null
           created_at?: string
           id?: string
           raw_summary?: string | null
           structured_summary?: Json | null
           title: string
+          transcription?: string | null
           user_id: string
         }
         Update: {
           audio_url?: string | null
-          content?: string | null
           created_at?: string
           id?: string
           raw_summary?: string | null
           structured_summary?: Json | null
           title?: string
+          transcription?: string | null
           user_id?: string
         }
         Relationships: []
