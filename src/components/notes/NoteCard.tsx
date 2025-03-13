@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { ChevronRight, FileText } from 'lucide-react';
@@ -29,10 +28,14 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onClick }) => {
         <div className="flex-1 min-w-0">
           <h3 className="font-medium text-foreground truncate">{note.title}</h3>
           <p className="text-xs text-muted-foreground">
-            {formatDistanceToNow(note.date, { addSuffix: true })}
+            {note.date ? (
+              note.date instanceof Date && !isNaN(note.date.getTime()) ?
+                formatDistanceToNow(note.date, { addSuffix: true }) :
+                'Date unavailable'
+            ) : 'Date unavailable'}
           </p>
           {note.preview && (
-            <p className="text-sm text-muted-foreground mt-1 truncate">
+            <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
               {note.preview}
             </p>
           )}

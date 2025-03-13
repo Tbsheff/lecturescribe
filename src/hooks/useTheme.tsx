@@ -1,11 +1,29 @@
-
 import { useState, useEffect } from 'react';
 
 type Theme = 'dark' | 'light' | 'system';
 
+// Safe localStorage access helper
+const safeLocalStorage = {
+  getItem(key: string, fallback: string = ''): string {
+    try {
+      return localStorage.getItem(key) || fallback;
+    } catch (error) {
+      console.warn('Error accessing localStorage:', error);
+      return fallback;
+    }
+  },
+  setItem(key: string, value: string): void {
+    try {
+      localStorage.setItem(key, value);
+    } catch (error) {
+      console.warn('Error setting localStorage:', error);
+    }
+  }
+};
+
 export function useTheme() {
   const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem('theme') as Theme) || 'system'
+    () => (safeLocalStorage.getItem('theme', 'system') as Theme) || 'system'
   );
 
   useEffect(() => {
@@ -41,7 +59,7 @@ export function useTheme() {
   }, [theme]);
 
   useEffect(() => {
-    localStorage.setItem('theme', theme);
+    safeLocalStorage.setItem('theme', theme);
   }, [theme]);
 
   return { theme, setTheme };

@@ -33,7 +33,6 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
     audioData 
   } = useMicrophone();
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (recordingInterval) {
@@ -43,7 +42,6 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   }, [recordingInterval]);
   
   const handleStartRecording = async () => {
-    // Check if user is authenticated
     if (!user) {
       toast.error('Please sign in to record audio');
       navigate('/auth');
@@ -52,7 +50,6 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
     
     await startRecording();
     
-    // Start duration counter
     const interval = setInterval(() => {
       setRecordingDuration((prev) => prev + 1);
     }, 1000);
@@ -63,7 +60,6 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   const handleStopRecording = () => {
     stopRecording();
     
-    // Clear interval
     if (recordingInterval) {
       clearInterval(recordingInterval);
       setRecordingInterval(null);
@@ -78,38 +74,36 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   };
   
   const handleSave = async () => {
-    if (audioBlob) {
-      try {
-        setIsProcessing(true);
-        
-        // Step 1: Transcribe and summarize audio using Supabase
-        setProcessingStep('Processing audio...');
-        const audioFile = new File([audioBlob], 'recording.wav', { type: 'audio/wav' });
-        const metadata = {
-          duration: recordingDuration,
-          format: 'wav',
-          size: audioBlob.size,
-          title: `Recording ${new Date().toLocaleTimeString()}`, // Set title to the current time
-        };
-        const { transcription, summary, noteId } = await processAudioWithSummary(audioFile, user.id, metadata);
-        
-        // Step 2: Return both the audio blob and processed data
-        onAudioSaved && onAudioSaved(audioBlob);
-        
-        // Navigate to the new note
-        navigate(`/notes/${noteId}`);
-        
-      } catch (error: any) {
-        console.error('Processing error:', error);
-        toast.error(`Processing failed: ${error.message}`);
-      } finally {
-        setIsProcessing(false);
-        setProcessingStep('');
-      }
+    if (!audioBlob || !user) return;
+
+    try {
+      setIsProcessing(true);
+      setProcessingStep('Processing audio...');
+
+      const audioFile = new File([audioBlob], 'recording.wav', { type: 'audio/wav' });
+      const metadata = {
+        title: `Recording ${new Date().toLocaleTimeString()}`,
+        duration: recordingDuration,
+        format: 'wav',
+        size: audioBlob.size,
+      };
+
+      const { noteId } = await processAudioWithSummary(audioFile, user.id, metadata);
+      
+      onAudioSaved && onAudioSaved(audioBlob);
+      
+      navigate(`/notes/${noteId}`);
+      
+      toast.success('Recording processed successfully!');
+    } catch (error: any) {
+      console.error('Processing error:', error);
+      toast.error(`Failed to process recording: ${error.message}`);
+    } finally {
+      setIsProcessing(false);
+      setProcessingStep('');
     }
   };
   
-  // Format duration as mm:ss
   const formatDuration = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;

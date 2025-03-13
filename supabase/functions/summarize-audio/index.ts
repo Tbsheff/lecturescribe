@@ -166,94 +166,52 @@ serve(async (req) => {
             const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```|(\{[\s\S]*\})/);
             let jsonContent = jsonMatch ? (jsonMatch[1] || jsonMatch[2]) : responseText;
             
-            // If no valid JSON found, try a more aggressive approach
             if (!jsonContent || jsonContent.trim().length < 10) {
-              console.log('No valid JSON found with regex, trying direct extraction');
-              // Try to extract any JSON object
-              const possibleJsonMatch = responseText.match(/(\{[\s\S]*?\})/g);
-              if (possibleJsonMatch && possibleJsonMatch.length > 0) {
-                jsonContent = possibleJsonMatch[0];
-              }
+              console.error('Invalid or empty response from Gemini API');
+              throw new Error('Failed to get valid response from transcription service');
             }
 
-            // Log the extracted JSON content for debugging
-            console.log('Extracted JSON content:', jsonContent.substring(0, 200) + '...');
-          
+            console.log('Attempting to parse response:', jsonContent.substring(0, 200));
+            
             try {
               const parsedResponse = JSON.parse(jsonContent);
-              console.log('JSON parsed successfully, checking fields...');
-              console.log('transcription field present:', !!parsedResponse.transcription);
-              console.log('notes field present:', !!parsedResponse.notes);
-              console.log('summary field present:', !!parsedResponse.summary);
-              console.log('keyPoints field present:', !!parsedResponse.keyPoints);
-            
-              if (parsedResponse.transcription && typeof parsedResponse.transcription === 'string' && parsedResponse.transcription.trim().length > 0) {
-                transcription = parsedResponse.transcription;
-                summaryContent = parsedResponse.notes || parsedResponse.summary || '';
-                audioText = transcription;
               
-                // Log success for debugging
-                console.log('Successfully parsed JSON response with valid transcription');
-                console.log('Transcription length:', transcription.length);
-                console.log('Transcription preview:', transcription.substring(0, 100) + '...');
-              } else {
-                // If transcription is missing or empty, use more robust extraction
-                console.log('Transcription missing or empty in parsed JSON, trying regex extraction');
-                transcription = extractTranscriptionBetter(responseText);
-                summaryContent = extractSummaryBetter(responseText);
-                audioText = transcription;
-
-                // Log the extracted content
-                console.log('Regex extraction result - transcription length:', transcription.length);
-                console.log('Regex extraction result - summary length:', summaryContent.length);
-
-                // If extraction still yields no results, try finding any substantial text
-                if (!transcription.trim()) {
-                  console.error('Failed to extract transcription with regex, looking for any text blocks');
-                  
-                  // Try to find any substantial text blocks
-                  const textBlocks = responseText.split(/\n\n+/).filter(block => 
-                    block.trim().length > 50 && 
-                    !block.includes('```')
-                  );
-                  
-                  if (textBlocks.length > 0) {
-                    console.log('Found text block of length:', textBlocks[0].length);
-                    transcription = textBlocks[0].trim();
-                    audioText = transcription;
-                  } else {
-                    throw new Error('Failed to extract any meaningful text from response');
-                  }
-                }
+              // Validate the response structure
+              if (!parsedResponse || typeof parsedResponse !== 'object') {
+                throw new Error('Invalid response format from transcription service');
               }
-            } catch (jsonParseError) {
-              console.error('Error parsing JSON string:', jsonParseError);
-              // Try regex extraction
-              transcription = extractTranscriptionBetter(responseText);
-              summaryContent = extractSummaryBetter(responseText);
+
+              // Validate transcription content
+              if (!parsedResponse.transcription || 
+                  typeof parsedResponse.transcription !== 'string' || 
+                  parsedResponse.transcription.trim().length < 10) {
+                throw new Error('Invalid or empty transcription in response');
+              }
+
+              // Check if the transcription looks like a sample or default response
+              const sampleContentIndicators = [
+                'sample lecture',
+                'modern computing architecture',
+                'this is a test',
+                'this is an example'
+              ];
+
+              if (sampleContentIndicators.some(indicator => 
+                parsedResponse.transcription.toLowerCase().includes(indicator))) {
+                console.error('Detected sample content in transcription');
+                throw new Error('Received sample content instead of actual transcription');
+              }
+
+              transcription = parsedResponse.transcription;
+              summaryContent = parsedResponse.notes || parsedResponse.summary || '';
               audioText = transcription;
-
-              console.log('After parse error, regex extraction - transcription length:', transcription.length);
-              console.log('After parse error, regex extraction - summary length:', summaryContent.length);
-
-              // If extraction yields no results, look for any text content
-              if (!transcription.trim()) {
-                // Last resort - look for any text in the response
-                const lines = responseText.split('\n').filter(line => 
-                  line.trim().length > 30 && 
-                  !line.includes('```') &&
-                  !line.startsWith('#') &&
-                  !line.startsWith('>')
-                );
-                
-                if (lines.length > 0) {
-                  transcription = lines.join('\n\n');
-                  audioText = transcription;
-                  console.log('Extracted text lines as fallback. Length:', transcription.length);
-                } else {
-                  throw new Error('Failed to extract any meaningful content from response');
-                }
-              }
+              
+              console.log('Successfully parsed response with valid transcription');
+              console.log('Transcription length:', transcription.length);
+              console.log('Transcription preview:', transcription.substring(0, 100) + '...');
+            } catch (parseError) {
+              console.error('Error parsing or validating response:', parseError);
+              throw new Error('Failed to process transcription: ' + parseError.message);
             }
           } catch (parseError) {
             console.error('Error with response parsing:', parseError);

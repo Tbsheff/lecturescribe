@@ -1,21 +1,53 @@
-import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { Home, Rocket, Settings, Moon, Sun, LogOut, Headphones } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
-import { useTheme } from '@/hooks/useTheme';
-import { useAuth } from '@/hooks/useAuth';
+import React from "react";
+import { Link, useLocation } from "react-router-dom";
+import {
+  Home,
+  Rocket,
+  Settings,
+  Moon,
+  Sun,
+  LogOut,
+  Headphones,
+  ArrowRight,
+  Folder,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { useTheme } from "@/hooks/useTheme";
+import { useAuth } from "@/hooks/useAuth";
 
 export const Sidebar = () => {
   const location = useLocation();
   const { theme, setTheme } = useTheme();
   const { user, signOut } = useAuth();
-  
+
   const navItems = [
-    { name: 'Home', icon: <Home className="h-5 w-5" />, path: '/' },
-    { name: 'Audio Upload', icon: <Headphones className="h-5 w-5" />, path: '/audio-summary' },
-    { name: 'How to use', icon: <Rocket className="h-5 w-5" />, path: '/how-to-use' },
-    { name: 'Settings', icon: <Settings className="h-5 w-5" />, path: '/settings' },
+    { name: "Home", icon: <Home className="h-5 w-5" />, path: "/" },
+    {
+      name: "Folders",
+      icon: <Folder className="h-5 w-5" />,
+      path: "/folders",
+    },
+    {
+      name: "Audio Upload",
+      icon: <Headphones className="h-5 w-5" />,
+      path: "/audio-summary",
+    },
+    {
+      name: "How to use",
+      icon: <Rocket className="h-5 w-5" />,
+      path: "/how-to-use",
+    },
+    {
+      name: "Settings",
+      icon: <Settings className="h-5 w-5" />,
+      path: "/settings",
+    },
+    {
+      name: "Migrate Notes",
+      icon: <ArrowRight className="h-5 w-5" />,
+      path: "/migrate",
+    },
   ];
 
   return (
@@ -55,7 +87,7 @@ export const Sidebar = () => {
                   "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                   location.pathname === item.path
                     ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent/50"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent/50",
                 )}
               >
                 {item.icon}
@@ -69,9 +101,11 @@ export const Sidebar = () => {
       <div className="p-4 mt-auto border-t border-border">
         {user && (
           <div className="mb-4">
-            <p className="text-sm text-muted-foreground truncate">{user.email}</p>
-            <Button 
-              variant="outline" 
+            <p className="text-sm text-muted-foreground truncate">
+              {user.email}
+            </p>
+            <Button
+              variant="outline"
               className="w-full mt-2 justify-start text-sm"
               onClick={() => signOut()}
             >
@@ -84,9 +118,9 @@ export const Sidebar = () => {
           variant="outline"
           size="icon"
           className="rounded-full"
-          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
         >
-          {theme === 'dark' ? (
+          {theme === "dark" ? (
             <Sun className="h-5 w-5" />
           ) : (
             <Moon className="h-5 w-5" />

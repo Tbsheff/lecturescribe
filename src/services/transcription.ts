@@ -1,19 +1,25 @@
 import { createClient } from '@supabase/supabase-js';
 
+interface TranscriptionOptions {
+  audioFile: File;
+  userId: string;
+}
+
 // Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL!;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Process audio to get both transcription and summary
 export const processAudioWithSummary = async (
   audioFile: File,
   userId: string,
   metadata: any
 ): Promise<{ transcription: string; summary: string; noteId: string }> => {
   try {
+    console.log('Processing audio with summary:', { userId, metadata });
+    
     // Process the audio using Supabase
-    const { transcription, summary } = await processAudioInSupabase(audioFile);
+    const { transcription, summary, fileUrl } = await processAudioInSupabase(audioFile);
     
     // Save the note with transcription and summary
     const { data: noteData, error: noteError } = await supabase
@@ -21,9 +27,11 @@ export const processAudioWithSummary = async (
       .insert({
         user_id: userId,
         title: metadata.title,
-        transcription,
-        summary,
+        content: transcription,
+        raw_summary: summary,
+        audio_url: fileUrl,
       })
+      .select()
       .single();
 
     if (noteError) {
@@ -42,46 +50,106 @@ export const processAudioWithSummary = async (
   }
 };
 
-// Fixed to match how it's used in AudioUploader
-export const transcribeAudio = async (audioFile: File): Promise<{ text: string }> => {
+export const transcribeAudio = async ({ audioFile, userId }: TranscriptionOptions) => {
   try {
-    // Upload to Supabase storage and get transcription
-    const { transcription } = await processAudioInSupabase(audioFile);
-    return { text: transcription };
+    // Early return with mock response if we don't have proper Supabase config
+    if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+      console.log('Using mock transcription for development');
+      return {
+        transcription: "This is a mock transcription for development purposes.",
+        error: null,
+      };
+    }
+
+    // Upload the audio file to Supabase Storage
+    const fileName = `${userId}/${Date.now()}-${audioFile.name}`;
+    const { data: fileData, error: uploadError } = await supabase.storage
+      .from('audio')
+      .upload(fileName, audioFile);
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    // Get a public URL for the uploaded file
+    const { data: urlData } = await supabase.storage
+      .from('audio')
+      .getPublicUrl(fileName);
+
+    const audioUrl = urlData?.publicUrl;
+
+    // Call the Edge Function to process the audio
+    const { data, error } = await supabase.functions.invoke('summarize-audio', {
+      body: { audioUrl },
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return {
+      transcription: data?.transcription || '',
+      error: null,
+    };
   } catch (error) {
     console.error('Transcription error:', error);
-    throw new Error('Failed to transcribe audio');
+    return {
+      transcription: '',
+      error: `Failed to transcribe audio: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    };
   }
 };
 
-// Function to summarize text transcription
-export const summarizeTranscription = async (text: string) => {
+// Update the fetch notes function to handle navigation
+export const fetchNotes = async () => {
   try {
-    // Call the Supabase function with the text
-    const { data, error } = await supabase.functions.invoke('summarize-audio', {
-      body: { audioText: text }
-    });
-    
-    if (error) {
-      console.error('Summarization error:', error);
-      throw new Error('Failed to summarize transcription');
-    }
-    
-    return {
-      transcription: text,
-      summary: data.summary
-    };
+    const { data, error } = await supabase
+      .from('notes')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    return data.map((note: any) => ({
+      id: note.id,
+      title: note.title || 'Untitled Note',
+      date: new Date(note.created_at),
+      preview: note.raw_summary || note.content?.substring(0, 100) || 'No content available'
+    }));
   } catch (error) {
-    console.error('Summarization error:', error);
-    throw new Error('Failed to summarize transcription');
+    console.error('Error fetching notes:', error);
+    throw new Error('Failed to fetch notes');
+  }
+};
+
+
+// Function to fetch a single note by ID
+export const fetchNoteById = async (noteId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('notes')
+      .select('*')
+      .eq('id', noteId)
+      .single();
+
+    if (error) {
+      console.error('Supabase fetch note by ID error:', error);
+      throw new Error(`Failed to fetch note by ID ${noteId} from database`);
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error fetching note by ID:', error);
+    throw new Error(`Failed to fetch note by ID ${noteId}`);
   }
 };
 
 // Helper function to process audio in Supabase
 export async function processAudioInSupabase(audioFile: File): Promise<{ transcription: string; summary: string; fileUrl: string }> {
+  console.log('processAudioInSupabase: Start');
   // Validate the audio file
   if (!audioFile || !audioFile.size) {
-    console.error('Invalid audio file:', audioFile);
+    console.error('processAudioInSupabase: Invalid audio file');
     throw new Error('Invalid or empty audio file');
   }
 
@@ -95,27 +163,43 @@ export async function processAudioInSupabase(audioFile: File): Promise<{ transcr
   // Check if file type is supported
   const supportedTypes = ['audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/mp4', 'audio/x-m4a', 'audio/webm'];
   let contentType = audioFile.type;
-  
+
   // If type is not explicitly supported, try to determine from extension
   if (!supportedTypes.includes(contentType)) {
     const extension = audioFile.name.split('.').pop()?.toLowerCase() || '';
-    if (extension === 'wav' || extension === 'wave') contentType = 'audio/wav';
-    else if (extension === 'mp3') contentType = 'audio/mpeg';
-    else if (extension === 'm4a') contentType = 'audio/x-m4a';
-    else if (extension === 'mp4') contentType = 'audio/mp4';
-    else if (extension === 'webm') contentType = 'audio/webm';
-    else contentType = 'audio/wav'; // Default to WAV if unknown
-    
-    console.log(`File MIME type ${audioFile.type} not explicitly supported, using ${contentType} based on extension`);
+    switch (extension) {
+      case 'wav':
+      case 'wave':
+        contentType = 'audio/wav';
+        break;
+      case 'mp3':
+      case 'mpeg':
+        contentType = 'audio/mpeg';
+        break;
+      case 'm4a':
+        contentType = 'audio/x-m4a';
+        break;
+      case 'mp4':
+        contentType = 'audio/mp4';
+        break;
+      case 'webm':
+        contentType = 'audio/webm';
+        break;
+      default:
+        throw new Error(`Unsupported file type: ${extension}. Please use WAV, MP3, M4A, or WebM files.`);
+    }
+    console.log(`Determined content type ${contentType} based on extension ${extension}`);
   }
 
-  // Generate a unique filename
+  // Generate a unique filename with original extension
   const fileExtension = audioFile.name.split('.').pop()?.toLowerCase() || 'wav';
   const filename = `audio_${Date.now()}.${fileExtension}`;
   const filePath = `temp_audio/${filename}`;
-  
+
   console.log(`Uploading file to Supabase storage: ${filePath} (${contentType})`);
-  
+
+  let publicUrl = ''; // Declare publicUrl here
+
   try {
     // 1. Upload the file to Supabase Storage
     const { data: uploadData, error: uploadError } = await supabase.storage
@@ -127,46 +211,60 @@ export async function processAudioInSupabase(audioFile: File): Promise<{ transcr
       });
 
     if (uploadError) {
-      console.error('Error uploading file to Supabase storage:', uploadError);
+      console.error('processAudioInSupabase: Storage Upload Error -', uploadError);
       throw new Error(`Failed to upload audio file: ${uploadError.message}`);
     }
 
     console.log('File uploaded successfully:', uploadData);
 
     // 2. Get a public URL for the file
-    const { data: { publicUrl } } = supabase.storage
+    const { data: urlData } = supabase.storage
       .from('audio_uploads')
       .getPublicUrl(filePath);
 
+    publicUrl = urlData.publicUrl; // Assign value to the declared publicUrl
     console.log('Generated public URL:', publicUrl);
 
-    // 3. Call the Supabase function with the file URL
-    console.log('Calling Supabase function with audio URL');
-    const response = await fetch(publicUrl, { method: 'HEAD' });
-    console.log('Audio file HEAD check:', { 
-      status: response.status, 
-      contentType: response.headers.get('content-type'),
-      contentLength: response.headers.get('content-length')
-    });
+    // Verify the uploaded file is accessible
+    try {
+      const response = await fetch(publicUrl, { method: 'HEAD' });
+      if (!response.ok) {
+        console.error('processAudioInSupabase: File Verification Error - HTTP Status', response.status);
+        throw new Error(`Failed to verify uploaded file: HTTP ${response.status}`);
+      }
+      console.log('Verified uploaded file is accessible:', {
+        status: response.status,
+        contentType: response.headers.get('content-type'),
+        contentLength: response.headers.get('content-length')
+      });
+    } catch (verifyError) {
+      console.error('processAudioInSupabase: File Verification Fetch Error -', verifyError);
+      // Continue anyway, as the file might still be processable
+    }
 
+    // 3. Call the Supabase function with the file URL and metadata
+    console.log('Calling Supabase function for audio processing');
     const { data, error } = await supabase.functions.invoke('summarize-audio', {
-      body: { 
+      body: {
         audioUrl: publicUrl,
-        contentType: contentType, // Pass the content type explicitly
-        fileName: filename // Pass the filename for reference
+        contentType: contentType,
+        fileName: filename
       }
     });
 
     if (error) {
-      console.error('Supabase function error:', error);
-      // Clean up the uploaded file
-      await supabase.storage.from('audio_uploads').remove([filePath]);
-      throw new Error(`Failed to process audio with Supabase function: ${error.message}`);
+      console.error('processAudioInSupabase: Supabase Function Invoke Error -', error);
+      throw new Error(`Failed to process audio: ${error.message}`);
     }
 
-    console.log('Audio processing successful, received response:', {
-      transcriptionLength: data?.transcription?.length || 0,
-      summaryLength: data?.summary?.length || 0
+    if (!data || !data.transcription || data.transcription.trim().length === 0) {
+      console.error('processAudioInSupabase: No transcription in response');
+      throw new Error('No transcription received from processing service');
+    }
+
+    console.log('Audio processing successful:', {
+      transcriptionLength: data.transcription.length,
+      summaryLength: data.summary?.length || 0
     });
 
     // 4. Clean up the uploaded file
@@ -174,25 +272,28 @@ export async function processAudioInSupabase(audioFile: File): Promise<{ transcr
       await supabase.storage.from('audio_uploads').remove([filePath]);
       console.log('Temporary audio file removed from storage');
     } catch (cleanupError) {
-      console.warn('Could not clean up temporary file, will expire automatically:', cleanupError);
-    }
-
-    // Validate the response
-    if (!data || !data.transcription) {
-      throw new Error('Invalid response from audio processing service');
+      console.warn('processAudioInSupabase: File Cleanup Error -', cleanupError);
+      // Don't throw on cleanup errors
     }
 
     return {
-      transcription: data.transcription || '',
+      transcription: data.transcription,
       summary: data.summary || '',
       fileUrl: publicUrl
     };
   } catch (error) {
-    console.error('Error during audio processing:', error);
-    // Make sure to clean up even if there was an error
-    await supabase.storage.from('audio_uploads').remove([filePath]).catch(e => {
-      console.error('Error cleaning up file after processing error:', e);
-    });
-    throw error;
+    console.error('processAudioInSupabase: General Error -', error);
+    // Clean up on error
+    try {
+      await supabase.storage.from('audio_uploads').remove([filePath]);
+    } catch (cleanupError) {
+      console.warn('processAudioInSupabase: Cleanup After Error -', cleanupError);
+    }
+
+    // Enhance error message for user-friendly display
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    throw new Error(`Audio processing failed: ${errorMessage}`);
+  } finally {
+    console.log('processAudioInSupabase: Finally');
   }
 }
