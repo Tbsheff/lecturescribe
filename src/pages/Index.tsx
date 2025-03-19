@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
-import { fetchNotes } from "@/services/transcription";
+import { fetchNotes } from "@/services/transcriptionService";
 
 type InputMethod = "record" | "upload" | "url";
 
@@ -36,12 +36,11 @@ const Index = () => {
       try {
         setIsLoading(true);
         const fetchedNotes = await fetchNotes(user.id);
-
         const formattedNotes: Note[] = fetchedNotes.map((note: any) => ({
           id: note.id,
           title: note.title,
           date: new Date(note.created_at),
-          preview: note.structured_summary?.summary || "No summary available",
+          preview: note.preview
         }));
 
         setNotes(formattedNotes);

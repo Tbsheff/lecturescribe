@@ -3,7 +3,7 @@ import { Upload, File, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { processAudioWithSummary } from '@/services/transcription';
+import { processAudioWithSummary } from '@/services/transcriptionService'; // Corrected import
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 
@@ -102,17 +102,16 @@ export const AudioUploader: React.FC<AudioUploaderProps> = ({
 
         console.log('User object before processAudioWithSummary:', user);
         // Pass user?.id explicitly here
-        const processedNote = await processAudioWithSummary(file, user.id, metadata); 
+        const processedNote = await processAudioWithSummary(file, user.id, metadata); // Corrected call
         console.log('processAudioWithSummary returned:', processedNote);
 
         if (processedNote && processedNote.noteId) {
           toast.success('Audio processed and notes saved successfully');
           onAudioUploaded(processedNote.noteId);
-          navigate(`/notes/${processedNote.noteId}`);
+          navigate(`/notes/${processedNote.noteId}`); // Fixed navigation to match route structure
         } else {
           toast.error('Error processing audio: No note ID returned');
         }
-
 
         setFile(null);
         if (inputRef.current) {
@@ -150,7 +149,7 @@ export const AudioUploader: React.FC<AudioUploaderProps> = ({
   };
 
   return (
-    <Card className="w-full max-w-lg mx-auto bg-card/60 backdrop-blur-sm border border-border/50 shadow-sm">
+    <Card className="w-full max-w-lg mx-auto bg-card/60 backdrop-blur-sm border border-border/50 shadow-sm transition-all duration-300 card-hover">
       <CardContent className="pt-6">
         {!file ? (
           <div

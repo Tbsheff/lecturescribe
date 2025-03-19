@@ -11,6 +11,7 @@ import NotesView from "./pages/NotesView";
 import HowToUse from "./pages/HowToUse";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
+import PageEditor from "./components/notes/pageEditor";
 
 // Lazy-loaded components
 const MigrationPage = lazy(() => import("./pages/MigrationPage"));
@@ -37,8 +38,8 @@ const App = () => {
               <Route path="/how-to-use" element={<HowToUse />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/audio-summary" element={<Index />} />
-              <Route
-                path="/migrate"
+              <Route path="/page-editor" element={<PageEditor />} />
+              <Route path="/migrate"
                 element={
                   <Suspense fallback={<div>Loading...</div>}>
                     <MigrationPage />

@@ -1,532 +1,573 @@
-import React, { useState, useEffect, useRef, KeyboardEvent } from "react";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+import React, { useState, useRef, useEffect } from 'react';
 import {
-  Bold,
-  Italic,
-  List,
-  ListOrdered,
+  EditorContent,
+  EditorRoot,
+  EditorCommand,
+  EditorCommandEmpty,
+  EditorCommandItem,
+  EditorCommandList,
+} from "novel";
+import { Document } from '@tiptap/extension-document';
+import { Paragraph } from '@tiptap/extension-paragraph';
+import { Text } from '@tiptap/extension-text';
+import { Bold as BoldExtension } from '@tiptap/extension-bold';
+import { Italic as ItalicExtension } from '@tiptap/extension-italic';
+import { Heading } from '@tiptap/extension-heading';
+import { BulletList } from '@tiptap/extension-bullet-list';
+import { OrderedList } from '@tiptap/extension-ordered-list';
+import { ListItem } from '@tiptap/extension-list-item';
+import { Blockquote } from '@tiptap/extension-blockquote';
+import { HorizontalRule } from '@tiptap/extension-horizontal-rule';
+import { CodeBlock } from '@tiptap/extension-code-block';
+import { Link as LinkExtension } from '@tiptap/extension-link';
+import { Placeholder } from '@tiptap/extension-placeholder';
+import debounce from 'lodash.debounce';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import {
   Heading1,
   Heading2,
   Heading3,
-  Code,
-  Image,
-  Link,
-  Underline,
-  Quote,
+  List,
+  ListOrdered,
   CheckSquare,
-  AlertTriangle,
-  Info,
-  Strikethrough,
-  Upload,
-} from "lucide-react";
-import { updateNoteContent } from "@/services/noteStorage";
-import { cn } from "@/lib/utils";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import rehypeRaw from "rehype-raw";
-import rehypeSanitize from "rehype-sanitize";
+  Code,
+  Quote,
+  Image,
+  Minus,
+  Link as LinkIcon,
+  Bold,
+  Italic,
+} from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { Button } from "@/components/ui/button"
+
+// Create extensions array with document structure and formatting options
+const extensions = [
+  // Core required extensions
+  Document,
+  Paragraph,
+  Text,
+  // Formatting extensions
+  BoldExtension,
+  ItalicExtension,
+  Heading.configure({
+    levels: [1, 2, 3],
+  }),
+  // List extensions
+  BulletList,
+  OrderedList,
+  ListItem,
+  // Block extensions
+  Blockquote,
+  HorizontalRule,
+  CodeBlock.configure({
+    HTMLAttributes: {
+      class: 'rounded-md bg-muted p-4 font-mono',
+    },
+  }),
+  // Link extension
+  LinkExtension.configure({
+    openOnClick: false,
+    HTMLAttributes: {
+      class: 'text-primary underline underline-offset-4',
+    },
+  }),
+  // Placeholder extension
+  Placeholder.configure({
+    placeholder: 'Type / for commands...',
+  }),
+];
+
+// Default content for new notes with proper ProseMirror schema
+const defaultContent = {
+  type: "doc",
+  content: [
+    {
+      type: "paragraph",
+      content: [{ type: "text", text: "" }]
+    }
+  ]
+};
+
+// Parse string content into valid ProseMirror doc
+const parseContent = (content: string) => {
+  try {
+    // Try parsing as JSON first
+    const parsed = JSON.parse(content);
+    // Ensure the content has the required schema structure
+    if (!parsed.type || parsed.type !== 'doc' || !Array.isArray(parsed.content)) {
+      throw new Error('Invalid document structure');
+    }
+    return parsed;
+  } catch (e) {
+    // If parsing fails, convert plain text to a proper document structure
+    return {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [{ type: "text", text: content || "" }]
+        }
+      ]
+    };
+  }
+};
+
+// Slash command suggestions
+const suggestionItems = [
+  {
+    title: "Heading 1",
+    description: "Large section heading",
+    icon: <Heading1 className="h-5 w-5" />,
+  },
+  {
+    title: "Heading 2",
+    description: "Medium section heading",
+    icon: <Heading2 className="h-5 w-5" />,
+  },
+  {
+    title: "Heading 3",
+    description: "Small section heading",
+    icon: <Heading3 className="h-5 w-5" />,
+  },
+  {
+    title: "Bullet List",
+    description: "Create a bullet list",
+    icon: <List className="h-5 w-5" />,
+  },
+  {
+    title: "Numbered List",
+    description: "Create a numbered list",
+    icon: <ListOrdered className="h-5 w-5" />,
+  },
+  {
+    title: "Task List",
+    description: "Create a task list",
+    icon: <CheckSquare className="h-5 w-5" />,
+  },
+  {
+    title: "Code Block",
+    description: "Add a code block",
+    icon: <Code className="h-5 w-5" />,
+  },
+  {
+    title: "Quote",
+    description: "Add a quote",
+    icon: <Quote className="h-5 w-5" />,
+  },
+  {
+    title: "Horizontal Line",
+    description: "Add a horizontal line",
+    icon: <Minus className="h-5 w-5" />,
+  },
+  {
+    title: "Link",
+    description: "Add a link",
+    icon: <LinkIcon className="h-5 w-5" />,
+  },
+];
 
 interface NoteEditorProps {
   noteId: string;
   userId: string;
   initialContent: string;
-  onSave?: (content: string) => void;
 }
 
-interface CalloutType {
-  icon: React.ReactNode;
-  label: string;
-  bgColor: string;
-  borderColor: string;
-}
-
-const NoteEditor: React.FC<NoteEditorProps> = ({
-  noteId,
-  userId,
-  initialContent,
-  onSave,
-}) => {
-  const [content, setContent] = useState(initialContent || "");
-  const [isSaving, setIsSaving] = useState(false);
-  const [lastSavedContent, setLastSavedContent] = useState(
-    initialContent || "",
-  );
-  const [activeTab, setActiveTab] = useState<"edit" | "preview">("edit");
-  const [isImageDialogOpen, setIsImageDialogOpen] = useState(false);
-  const [imageUrl, setImageUrl] = useState("");
-  const [imageAlt, setImageAlt] = useState("Image");
-  const [imageWidth, setImageWidth] = useState("auto");
-  const [imageAlign, setImageAlign] = useState("center");
-
-  const editorRef = useRef<HTMLTextAreaElement>(null);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const calloutTypes: Record<string, CalloutType> = {
-    note: {
-      icon: <Info className="h-4 w-4" />,
-      label: "Note",
-      bgColor: "bg-blue-50 dark:bg-blue-950",
-      borderColor: "border-blue-200 dark:border-blue-800",
-    },
-    warning: {
-      icon: <AlertTriangle className="h-4 w-4" />,
-      label: "Warning",
-      bgColor: "bg-amber-50 dark:bg-amber-950",
-      borderColor: "border-amber-200 dark:border-amber-800",
-    },
-    info: {
-      icon: <Info className="h-4 w-4" />,
-      label: "Info",
-      bgColor: "bg-indigo-50 dark:bg-indigo-950",
-      borderColor: "border-indigo-200 dark:border-indigo-800",
-    },
-  };
-
-  // Auto-save when content changes after a delay
-  useEffect(() => {
-    if (content !== lastSavedContent) {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-
-      saveTimeoutRef.current = setTimeout(() => {
-        saveContent();
-      }, 1500); // 1.5 second delay before saving
+const NoteEditor = ({ noteId, userId, initialContent }: NoteEditorProps) => {
+  const [content, setContent] = useState(() => {
+    if (!initialContent) return defaultContent;
+    try {
+      return parseContent(initialContent);
+    } catch (error) {
+      console.error('Error parsing initial content:', error);
+      return defaultContent;
     }
+  });
 
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
+  const [saveStatus, setSaveStatus] = useState("Saved");
+  const [showCommands, setShowCommands] = useState(false);
+  const [commandFilter, setCommandFilter] = useState("");
+  const editorRef = useRef<any>(null);
+
+  // Handle keyboard events
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === '/' && !showCommands && document.activeElement === editorRef.current?.querySelector('.ProseMirror')) {
+        setShowCommands(true);
+        setCommandFilter("");
+        // We don't preventDefault here because we want the "/" to appear in the editor
+      } else if (e.key === 'Escape' && showCommands) {
+        setShowCommands(false);
+        setCommandFilter("");
+      } else if (showCommands && /^[a-zA-Z]$/.test(e.key)) {
+        setCommandFilter(prev => prev + e.key.toLowerCase());
+      } else if (showCommands && e.key === 'Backspace') {
+        setCommandFilter(prev => prev.slice(0, -1));
+      } else if (showCommands && (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Enter')) {
+        // Let the command menu handle these keys
+        e.preventDefault();
       }
     };
-  }, [content]);
 
-  // Save content to the server
-  const saveContent = async () => {
-    if (content === lastSavedContent) return;
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showCommands]);
 
+  // Filter suggestions based on input
+  const filteredItems = suggestionItems.filter(item =>
+    item.title.toLowerCase().includes(commandFilter.toLowerCase()) ||
+    item.description.toLowerCase().includes(commandFilter.toLowerCase())
+  );
+
+  // Save content to Supabase
+  const handleSave = async (newContent: string) => {
     try {
-      setIsSaving(true);
-      await updateNoteContent(userId, noteId, content);
-      setLastSavedContent(content);
-      if (onSave) onSave(content);
-    } catch (error: any) {
-      console.error("Error saving note content:", error);
-      toast.error(`Failed to save note: ${error.message}`);
-    } finally {
-      setIsSaving(false);
-    }
-  };
+      const { error } = await supabase
+        .from('notes')
+        .update({ transcription: newContent })
+        .eq('id', noteId)
+        .eq('user_id', userId);
 
-  // Insert formatting at cursor position
-  const insertFormatting = (prefix: string, suffix: string = "") => {
-    if (!editorRef.current) return;
-
-    const textarea = editorRef.current;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selectedText = content.substring(start, end);
-    const beforeText = content.substring(0, start);
-    const afterText = content.substring(end);
-
-    const newContent = beforeText + prefix + selectedText + suffix + afterText;
-    setContent(newContent);
-
-    // Focus back on textarea and set cursor position after formatting
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(
-        start + prefix.length,
-        end + prefix.length + (selectedText.length > 0 ? 0 : suffix.length),
-      );
-    }, 0);
-  };
-
-  // Handle keyboard shortcuts
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.ctrlKey || e.metaKey) {
-      switch (e.key) {
-        case "b":
-          e.preventDefault();
-          handleBold();
-          break;
-        case "i":
-          e.preventDefault();
-          handleItalic();
-          break;
-        case "u":
-          e.preventDefault();
-          handleUnderline();
-          break;
-        case "1":
-          e.preventDefault();
-          handleHeading1();
-          break;
-        case "2":
-          e.preventDefault();
-          handleHeading2();
-          break;
-        case "3":
-          e.preventDefault();
-          handleHeading3();
-          break;
-        case "k":
-          e.preventDefault();
-          handleLink();
-          break;
+      if (error) {
+        console.error('Error saving note:', error);
+        toast.error('Failed to save note');
+        return;
       }
-    } else if (e.key === "Tab") {
-      // Handle tab for indentation in lists
-      const textarea = editorRef.current;
-      if (!textarea) return;
 
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const currentLine = getCurrentLine(content, start);
-
-      // Check if we're in a list item
-      if (/^(\s*)([-*+]|\d+\.)\s/.test(currentLine)) {
-        e.preventDefault();
-
-        if (e.shiftKey) {
-          // Unindent: remove 2 spaces if present
-          if (currentLine.startsWith("  ")) {
-            const newContent =
-              content.substring(0, start - currentLine.length) +
-              currentLine.substring(2) +
-              content.substring(end);
-            setContent(newContent);
-            textarea.setSelectionRange(start - 2, end - 2);
-          }
-        } else {
-          // Indent: add 2 spaces
-          const lineStart = start - getCurrentLineOffset(content, start);
-          const newContent =
-            content.substring(0, lineStart) +
-            "  " +
-            content.substring(lineStart);
-          setContent(newContent);
-          textarea.setSelectionRange(start + 2, end + 2);
-        }
-      }
+      setSaveStatus("Saved");
+      console.log('Note saved successfully');
+    } catch (error) {
+      console.error('Error in save:', error);
+      toast.error('Failed to save note');
     }
   };
 
-  // Get the current line of text based on cursor position
-  const getCurrentLine = (text: string, cursorPos: number): string => {
-    const textBeforeCursor = text.substring(0, cursorPos);
-    const lastNewlineIndex = textBeforeCursor.lastIndexOf("\n");
-    return textBeforeCursor.substring(lastNewlineIndex + 1);
-  };
+  const debouncedSave = debounce(handleSave, 500);
 
-  // Get the offset of the current line from the cursor position
-  const getCurrentLineOffset = (text: string, cursorPos: number): number => {
-    const textBeforeCursor = text.substring(0, cursorPos);
-    const lastNewlineIndex = textBeforeCursor.lastIndexOf("\n");
-    return cursorPos - (lastNewlineIndex + 1);
-  };
-
-  // Handle file upload
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // For demo purposes, we'll use a placeholder URL
-    // In a real app, you would upload the file to a server
-    const placeholderUrl = URL.createObjectURL(file);
-    insertFormatting(`![${file.name}](${placeholderUrl})`);
-
-    // Reset the file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
-
-  // Insert image with custom attributes
-  const insertImage = () => {
-    if (!imageUrl) {
-      toast.error("Please enter an image URL");
-      return;
-    }
-
-    const imgMarkdown = `![${imageAlt}](${imageUrl})`;
-    insertFormatting(imgMarkdown);
-    setIsImageDialogOpen(false);
-    setImageUrl("");
-    setImageAlt("Image");
-  };
-
-  // Formatting handlers
-  const handleBold = () => insertFormatting("**", "**");
-  const handleItalic = () => insertFormatting("*", "*");
-  const handleUnderline = () => insertFormatting("<u>", "</u>");
-  const handleStrikethrough = () => insertFormatting("~~", "~~");
-  const handleHeading1 = () => insertFormatting("# ");
-  const handleHeading2 = () => insertFormatting("## ");
-  const handleHeading3 = () => insertFormatting("### ");
-  const handleBulletList = () => insertFormatting("- ");
-  const handleNumberedList = () => insertFormatting("1. ");
-  const handleCheckbox = () => insertFormatting("- [ ] ");
-  const handleCode = () => insertFormatting("```\n", "\n```");
-  const handleInlineCode = () => insertFormatting("`", "`");
-  const handleLink = () => insertFormatting("[", "](url)");
-  const handleImage = () => {
-    // For simple implementation, just insert image markdown
-    insertFormatting("![alt text](", ")");
-  };
-  const handleQuote = () => insertFormatting("> ");
-
-  // Insert callout block
-  const handleCallout = (type: string) => {
-    const callout = calloutTypes[type];
-    if (!callout) return;
-
-    const calloutText = `:::${type}\n**${callout.label}:** Write your ${type} text here\n:::\n`;
-    insertFormatting(calloutText);
-  };
-
-  // Custom renderer for callouts in preview
-  const customCalloutRenderer = (text: string): string => {
-    // Replace callout syntax with HTML
-    let processedText = text;
-
-    // Match callout blocks
-    const calloutRegex = /:::(note|warning|info)\n([\s\S]*?)\n:::/g;
-    processedText = processedText.replace(
-      calloutRegex,
-      (match, type, content) => {
-        const callout = calloutTypes[type];
-        if (!callout) return match;
-
-        return `<div class="p-4 my-4 rounded-md border ${callout.bgColor} ${callout.borderColor}">
-        <div class="flex items-start">
-          <div class="mr-2 text-${type}-600">${type === "note" ? "📝" : type === "warning" ? "⚠️" : "ℹ️"}</div>
-          <div>${content}</div>
-        </div>
-      </div>`;
-      },
-    );
-
-    return processedText;
-  };
-
-  return (
-    <div className="flex flex-col w-full h-full">
-      <Tabs
-        value={activeTab}
-        onValueChange={(value) => setActiveTab(value as "edit" | "preview")}
-        className="w-full"
-      >
-        <div className="flex items-center justify-between p-2 border-b">
-          <TabsList>
-            <TabsTrigger value="edit">Edit</TabsTrigger>
-            <TabsTrigger value="preview">Preview</TabsTrigger>
-          </TabsList>
-          <div className="text-xs text-muted-foreground">
-            {isSaving ? "Saving..." : "Saved"}
-          </div>
-        </div>
-
-        <TabsContent
-          value="edit"
-          className="flex flex-col flex-1 mt-0 border-none p-0"
-        >
-          <div className="flex flex-wrap items-center gap-1 p-2 border-b bg-muted/30">
+  // Create toolbar with formatting options
+  const toolbar = (
+    <div className="border border-input bg-transparent rounded-t-md px-2 py-1 flex flex-wrap items-center gap-1 mb-0">
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
             <Button
               variant="ghost"
-              size="sm"
-              onClick={handleBold}
-              title="Bold (Ctrl+B)"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => {
+                if (editorRef.current) {
+                  const editor = editorRef.current.getEditor();
+                  editor.chain().focus().toggleBold().run();
+                }
+              }}
             >
               <Bold className="h-4 w-4" />
             </Button>
+          </TooltipTrigger>
+          <TooltipContent>Bold</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
             <Button
               variant="ghost"
-              size="sm"
-              onClick={handleItalic}
-              title="Italic (Ctrl+I)"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => {
+                if (editorRef.current) {
+                  const editor = editorRef.current.getEditor();
+                  editor.chain().focus().toggleItalic().run();
+                }
+              }}
             >
               <Italic className="h-4 w-4" />
             </Button>
+          </TooltipTrigger>
+          <TooltipContent>Italic</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
             <Button
               variant="ghost"
-              size="sm"
-              onClick={handleUnderline}
-              title="Underline (Ctrl+U)"
-            >
-              <Underline className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleStrikethrough}
-              title="Strikethrough"
-            >
-              <Strikethrough className="h-4 w-4" />
-            </Button>
-            <div className="h-4 w-px bg-border mx-1"></div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleHeading1}
-              title="Heading 1 (Ctrl+1)"
-            >
-              <Heading1 className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleHeading2}
-              title="Heading 2 (Ctrl+2)"
-            >
-              <Heading2 className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleHeading3}
-              title="Heading 3 (Ctrl+3)"
-            >
-              <Heading3 className="h-4 w-4" />
-            </Button>
-            <div className="h-4 w-px bg-border mx-1"></div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleBulletList}
-              title="Bullet List"
-            >
-              <List className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleNumberedList}
-              title="Numbered List"
-            >
-              <ListOrdered className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleCheckbox}
-              title="Checkbox"
-            >
-              <CheckSquare className="h-4 w-4" />
-            </Button>
-            <div className="h-4 w-px bg-border mx-1"></div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleQuote}
-              title="Quote"
-            >
-              <Quote className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleCallout("note")}
-              title="Note Callout"
-            >
-              <Info className="h-4 w-4 text-blue-500" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleCallout("warning")}
-              title="Warning Callout"
-            >
-              <AlertTriangle className="h-4 w-4 text-amber-500" />
-            </Button>
-            <div className="h-4 w-px bg-border mx-1"></div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleInlineCode}
-              title="Inline Code"
-            >
-              <span className="font-mono text-xs">`code`</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleCode}
-              title="Code Block"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => {
+                if (editorRef.current) {
+                  const editor = editorRef.current.getEditor();
+                  editor.chain().focus().toggleCode().run();
+                }
+              }}
             >
               <Code className="h-4 w-4" />
             </Button>
-            <div className="h-4 w-px bg-border mx-1"></div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleLink}
-              title="Link (Ctrl+K)"
-            >
-              <Link className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleImage}
-              title="Image"
-            >
-              <Image className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => fileInputRef.current?.click()}
-              title="Upload Image"
-            >
-              <Upload className="h-4 w-4" />
-            </Button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              className="hidden"
-              accept="image/*"
-              onChange={handleFileUpload}
-            />
-          </div>
+          </TooltipTrigger>
+          <TooltipContent>Inline Code</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
 
-          <Textarea
-            ref={editorRef}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            onKeyDown={handleKeyDown}
-            className="flex-1 min-h-[500px] p-4 text-base font-mono resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-            placeholder="Start writing..."
-            onBlur={saveContent}
-          />
-        </TabsContent>
+      <div className="w-px h-6 bg-border mx-1"></div>
 
-        <TabsContent value="preview" className="mt-0 border-none p-0">
-          <ScrollArea className="h-[600px] w-full rounded-md border">
-            <div className="p-4">
-              {content ? (
-                <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-xl prose-h2:text-lg prose-h3:text-base prose-a:text-brand hover:prose-a:text-brand-dark prose-img:rounded-md prose-img:mx-auto prose-code:bg-muted prose-code:p-1 prose-code:rounded prose-code:text-sm">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeRaw, rehypeSanitize]}
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => {
+                if (editorRef.current) {
+                  const editor = editorRef.current.getEditor();
+                  editor.chain().focus().toggleHeading({ level: 1 }).run();
+                }
+              }}
+            >
+              <Heading1 className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Heading 1</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => {
+                if (editorRef.current) {
+                  const editor = editorRef.current.getEditor();
+                  editor.chain().focus().toggleHeading({ level: 2 }).run();
+                }
+              }}
+            >
+              <Heading2 className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Heading 2</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
+      <div className="w-px h-6 bg-border mx-1"></div>
+
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => {
+                if (editorRef.current) {
+                  const editor = editorRef.current.getEditor();
+                  editor.chain().focus().toggleBulletList().run();
+                }
+              }}
+            >
+              <List className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Bullet List</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => {
+                if (editorRef.current) {
+                  const editor = editorRef.current.getEditor();
+                  editor.chain().focus().toggleOrderedList().run();
+                }
+              }}
+            >
+              <ListOrdered className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Numbered List</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
+      <div className="w-px h-6 bg-border mx-1"></div>
+
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => {
+                if (editorRef.current) {
+                  const editor = editorRef.current.getEditor();
+                  editor.chain().focus().toggleBlockquote().run();
+                }
+              }}
+            >
+              <Quote className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Quote</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => {
+                if (editorRef.current) {
+                  const editor = editorRef.current.getEditor();
+                  const url = window.prompt("Enter link URL");
+                  if (url) {
+                    editor.chain().focus().setLink({ href: url }).run();
+                  }
+                }
+              }}
+            >
+              <LinkIcon className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Add Link</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  );
+
+  return (
+    <div className="relative w-full">
+      <div className="flex absolute right-5 top-5 z-10 mb-5">
+        <div className="rounded-lg bg-accent px-2 py-1 text-sm text-muted-foreground">
+          {saveStatus}
+        </div>
+      </div>
+
+      <EditorRoot>
+        {toolbar}
+
+        <EditorContent
+          ref={editorRef}
+          initialContent={content}
+          className="relative min-h-[500px] w-full border-muted bg-background sm:mb-[calc(20vh)] sm:rounded-b-lg sm:border sm:border-t-0 sm:shadow-lg"
+          extensions={extensions}
+          editorProps={{
+            attributes: {
+              class: "prose-lg prose-stone dark:prose-invert prose-headings:font-title font-default focus:outline-none max-w-full p-4",
+            },
+          }}
+          onUpdate={({ editor }) => {
+            setSaveStatus("Unsaved");
+            const json = editor.getJSON();
+            debouncedSave(JSON.stringify(json));
+
+            // Check if the current content contains a slash
+            const selection = editor.state.selection;
+            const currentLine = editor.state.doc.textBetween(
+              selection.$from.start(),
+              selection.$from.pos,
+              "\n"
+            );
+
+            if (currentLine.endsWith('/') && !showCommands) {
+              setShowCommands(true);
+              setCommandFilter("");
+            }
+          }}
+        >
+          {showCommands && (
+            <EditorCommand className="z-50 h-auto max-h-[330px] overflow-y-auto rounded-md border border-muted bg-background px-1 py-2 shadow-md transition-all">
+              <EditorCommandEmpty className="px-2 text-muted-foreground">
+                No matching commands found
+              </EditorCommandEmpty>
+              <EditorCommandList>
+                {filteredItems.map((item) => (
+                  <EditorCommandItem
+                    key={item.title}
+                    value={item.title}
+                    onCommand={() => {
+                      if (editorRef.current) {
+                        const editor = editorRef.current.getEditor();
+
+                        // First, remove the slash character
+                        editor.commands.deleteRange({
+                          from: editor.state.selection.from - 1,
+                          to: editor.state.selection.from
+                        });
+
+                        switch (item.title) {
+                          case "Heading 1":
+                            editor.chain().focus().toggleHeading({ level: 1 }).run();
+                            break;
+                          case "Heading 2":
+                            editor.chain().focus().toggleHeading({ level: 2 }).run();
+                            break;
+                          case "Heading 3":
+                            editor.chain().focus().toggleHeading({ level: 3 }).run();
+                            break;
+                          case "Bullet List":
+                            editor.chain().focus().toggleBulletList().run();
+                            break;
+                          case "Numbered List":
+                            editor.chain().focus().toggleOrderedList().run();
+                            break;
+                          case "Task List":
+                            editor.chain().focus().toggleTaskList().run();
+                            break;
+                          case "Code Block":
+                            editor.chain().focus().toggleCodeBlock().run();
+                            break;
+                          case "Quote":
+                            editor.chain().focus().toggleBlockquote().run();
+                            break;
+                          case "Horizontal Line":
+                            editor.chain().focus().setHorizontalRule().run();
+                            break;
+                          case "Link":
+                            const url = window.prompt('Enter URL');
+                            if (url) {
+                              editor.chain().focus().setLink({ href: url }).run();
+                            }
+                            break;
+                        }
+                        setShowCommands(false);
+                        setCommandFilter("");
+                      }
+                    }}
+                    className="flex w-full items-center space-x-2 rounded-md px-2 py-1 text-left text-sm hover:bg-accent aria-selected:bg-accent"
                   >
-                    {customCalloutRenderer(content)}
-                  </ReactMarkdown>
-                </div>
-              ) : (
-                <div className="text-muted-foreground text-center py-8">
-                  Nothing to preview yet. Start writing in the editor.
-                </div>
-              )}
-            </div>
-          </ScrollArea>
-        </TabsContent>
-      </Tabs>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-md border border-muted bg-background">
+                      {item.icon}
+                    </div>
+                    <div>
+                      <p className="font-medium">{item.title}</p>
+                      <p className="text-xs text-muted-foreground">{item.description}</p>
+                    </div>
+                  </EditorCommandItem>
+                ))}
+              </EditorCommandList>
+            </EditorCommand>
+          )}
+        </EditorContent>
+      </EditorRoot>
     </div>
   );
 };

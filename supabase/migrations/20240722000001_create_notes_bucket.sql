@@ -53,3 +53,14 @@ USING (user_id = auth.uid());
 
 -- Enable realtime for note_metadata
 alter publication supabase_realtime add table note_metadata;
+
+-- IMPORTANT: Manually add the following policy to the 'storage.buckets' table in the Supabase dashboard.
+-- Go to: Authentication -> Policies -> New Policy (on storage.buckets) -> Use a template -> Enable read access to all authenticated users
+-- Then, change the target roles to 'authenticated' only, and modify the USING expression to: (id = 'notes')
+-- The final SQL should look like this:
+-- CREATE POLICY "Allow read access to 'notes' bucket for authenticated users"
+-- ON storage.buckets FOR SELECT
+-- TO authenticated
+-- USING (id = 'notes');
+
+-- VERIFY: Double-check that the bucket name 'notes' used here matches the actual bucket name in your Supabase project.

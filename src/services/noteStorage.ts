@@ -5,8 +5,9 @@ import { v4 as uuidv4 } from "uuid";
 export interface NoteData {
   id?: string;
   title: string;
-  transcription: string;
-  summary: string;
+  content?: string;
+  transcription?: string;
+  summary?: string;
   structuredSummary?: any;
   audioUrl?: string;
   createdAt?: Date;
@@ -25,6 +26,17 @@ export interface NoteMetadata {
   note_path: string;
   folder_id?: string | null;
 }
+
+// Default content structure for new notes
+const defaultContent = {
+  type: "doc",
+  content: [
+    {
+      type: "paragraph",
+      content: [{ type: "text", text: "" }]
+    }
+  ]
+};
 
 /**
  * Save a note to Supabase storage bucket
@@ -48,7 +60,8 @@ export const saveNote = async (
     const noteContent = {
       id: noteId,
       title: noteData.title,
-      transcription: noteData.transcription, // Ensure transcription is saved
+      content: noteData.content || noteData.transcription || JSON.stringify(defaultContent),
+      transcription: noteData.transcription,
       summary: noteData.summary,
       structuredSummary: noteData.structuredSummary || null,
       createdAt: noteData.createdAt || new Date().toISOString(),
@@ -60,7 +73,7 @@ export const saveNote = async (
     const noteJson = JSON.stringify(noteContent, null, 2);
 
     // Upload note JSON to the notes bucket
-    const { error: noteUploadError } = await supabase.storage
+    const { data: uploadData, error: noteUploadError } = await supabase.storage
       .from("notes")
       .upload(notePath, noteJson, {
         contentType: "application/json",
@@ -140,73 +153,82 @@ export const saveNote = async (
 /**
  * Get a note from Supabase storage bucket
  */
-export const getNote = async (
-  noteId: string,
-): Promise<NoteData> => {
+export const getNote = async (noteId: string): Promise<NoteData> => {
   try {
     const { data: user, error: userError } = await supabase.auth.getUser();
-
     if (userError || !user) {
       console.error("Error fetching user:", userError);
       throw new Error("User not authenticated");
     }
-    
     const userId = user.user.id;
     console.log(`Getting note ${noteId} for user ${userId}`);
 
-    // Construct the path to the note JSON file
-    const notePath = `${userId}/${noteId}/note.json`;
+    // First check if the note exists in metadata and get the correct path
+    const { data: metadataResults, error: metadataError } = await supabase
+      .from("note_metadata")
+      .select("*")
+      .eq("id", noteId)
+      .eq("user_id", userId)
+      .maybeSingle();
 
-    // Download the note JSON file
+    if (metadataError) {
+      console.error("Error fetching note metadata:", metadataError);
+      throw new Error(`Note not found or access denied`);
+    }
+
+    if (!metadataResults) {
+      throw new Error(`Note not found for ID ${noteId}`);
+    }
+
+    // Use the path from metadata
+    const notePath = metadataResults.note_path;
+    console.log("Using note path from metadata:", notePath);
+
+    // Download the note JSON file using the path from metadata
     const { data: noteData, error: noteError } = await supabase.storage
       .from("notes")
       .download(notePath);
 
     if (noteError) {
       console.error("Error downloading note:", noteError);
-      throw new Error(`Failed to download note: ${noteError.message}`);
+      throw new Error(`Failed to download note: ${JSON.stringify(noteError)}`);
     }
 
     // Parse the JSON data
     const noteText = await noteData.text();
     const note = JSON.parse(noteText);
 
-    // Get metadata to check if there's an audio file
-    const { data: metadata, error: metadataError } = await supabase
-      .from("note_metadata")
-      .select("audio_path, audio_bucket_path")
-      .eq("id", noteId)
-      .single();
-
-    if (metadataError && metadataError.code !== "PGRST116") {
-      // Ignore not found error
-      console.error("Error fetching note metadata:", metadataError);
-    }
-
     // If there's an audio file, get its public URL
     let audioUrl = null;
-    if (metadata?.audio_bucket_path) {
-      // Prefer the bucket path if available
+    if (metadataResults.audio_bucket_path) {
       const { data: urlData } = supabase.storage
         .from("notes")
-        .getPublicUrl(metadata.audio_bucket_path);
-
+        .getPublicUrl(metadataResults.audio_bucket_path);
       audioUrl = urlData.publicUrl;
-    } else if (metadata?.audio_path) {
-      // Fall back to the original audio_path if it's a full URL
-      if (metadata.audio_path.startsWith("http")) {
-        audioUrl = metadata.audio_path;
+    } else if (metadataResults.audio_path) {
+      if (metadataResults.audio_path.startsWith("http")) {
+        audioUrl = metadataResults.audio_path;
       } else {
-        // Try to get from storage if it's a path
         const { data: urlData } = supabase.storage
           .from("notes")
-          .getPublicUrl(metadata.audio_path);
-
+          .getPublicUrl(metadataResults.audio_path);
         audioUrl = urlData.publicUrl;
       }
     }
 
-    // Return the note data with the audio URL if available
+    // Transform stored content to match expected schema if needed
+    if (!note.content && note.transcription) {
+      note.content = JSON.stringify({
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: note.transcription }]
+          }
+        ]
+      });
+    }
+
     return {
       ...note,
       audioUrl,
@@ -322,7 +344,7 @@ export const updateNoteTitle = async (
     console.log(`Updating title for note ${noteId}`);
 
     // Get the current note data
-    const note = await getNote(userId, noteId);
+    const note = await getNote(noteId);
 
     // Update the title
     note.title = newTitle;
@@ -358,10 +380,10 @@ export const updateNoteContent = async (
     console.log(`Updating content for note ${noteId}`);
 
     // Get the current note data
-    const note = await getNote(userId, noteId);
+    const note = await getNote(noteId);
 
     // Update the content
-    note.transcription = content;
+    note.content = content;
 
     // Save the updated note
     await saveNote(userId, note);
@@ -385,7 +407,7 @@ export const createEmptyNote = async (
     // Create a new note with empty content
     const noteId = await saveNote(userId, {
       title,
-      transcription: "",
+      content: JSON.stringify(defaultContent),
       summary: "No content yet",
       structuredSummary: null,
       folderId

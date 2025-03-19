@@ -4,14 +4,7 @@ import App from "./App.tsx";
 import "./index.css";
 
 // Import the dev tools and initialize them conditionally
-try {
-  if (import.meta.env.VITE_TEMPO === "true") {
-    const { TempoDevtools } = require("tempo-devtools");
-    TempoDevtools.init();
-  }
-} catch (e) {
-  console.warn("Failed to initialize Tempo devtools", e);
-}
+
 
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

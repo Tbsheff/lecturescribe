@@ -15,6 +15,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator, // Import DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu";
 import {
   Dialog,
@@ -25,6 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { FolderOpen } from "lucide-react"; // Import FolderOpen icon
 
 export interface FolderItem {
   id: string;
@@ -72,6 +74,12 @@ const FolderTree: React.FC<FolderTreeProps> = ({
   const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [currentParentId, setCurrentParentId] = useState<string | null>(null);
+
+  const [isMoveDialogOpen, setIsMoveDialogOpen] = useState(false);
+  const [itemToMove, setItemToMove] = useState<{
+    id: string;
+    type: "folder" | "note";
+  } | null>(null);
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
   const [itemToRename, setItemToRename] = useState<{
     id: string;
@@ -79,6 +87,7 @@ const FolderTree: React.FC<FolderTreeProps> = ({
     type: "folder" | "note";
   } | null>(null);
   const [newItemName, setNewItemName] = useState("");
+  const [targetFolderId, setTargetFolderId] = useState<string | null>(null);
   const [draggedItem, setDraggedItem] = useState<{
     id: string;
     type: "folder" | "note";
@@ -108,6 +117,14 @@ const FolderTree: React.FC<FolderTreeProps> = ({
     setIsCreateFolderOpen(true);
   };
 
+  const handleMoveItem = () => {
+    if (!itemToMove || targetFolderId === undefined) return; // Use undefined for consistency
+    onMoveItem(itemToMove.id, targetFolderId, itemToMove.type);
+    setIsMoveDialogOpen(false);
+    setItemToMove(null);
+    setTargetFolderId(null); // Reset targetFolderId
+  };
+
   const handleRenameItem = () => {
     if (!itemToRename || !newItemName.trim()) {
       toast.error("Name cannot be empty");
@@ -117,6 +134,12 @@ const FolderTree: React.FC<FolderTreeProps> = ({
     setIsRenameDialogOpen(false);
     setItemToRename(null);
     setNewItemName("");
+  };
+
+  const openMoveDialog = (item: { id: string; type: "folder" | "note" }) => {
+    setItemToMove(item);
+    setTargetFolderId(null); // Reset when opening the dialog
+    setIsMoveDialogOpen(true);
   };
 
   const openRenameDialog = (item: {
@@ -159,6 +182,39 @@ const FolderTree: React.FC<FolderTreeProps> = ({
     setDropTarget(null);
   };
 
+  // Helper function to render folder options for the move dialog
+  const renderFolderOptions = (
+    items: TreeItem[],
+    level = 0,
+    parentId: string | null = null,
+  ): React.ReactNode[] => {
+    const options: React.ReactNode[] = [];
+
+    items
+      .filter((item) => item.parentId === parentId && item.type === "folder")
+      .forEach((folder) => {
+        options.push(
+          <DropdownMenuItem
+            key={folder.id}
+            onClick={() => setTargetFolderId(folder.id)}
+            className={cn(
+              "cursor-pointer pl-2",
+              targetFolderId === folder.id && "bg-accent text-accent-foreground",
+            )}
+            style={{ paddingLeft: `${level * 16 + 8}px` }}
+          >
+            <Folder className="h-4 w-4 mr-2 text-muted-foreground" />
+            {folder.name}
+          </DropdownMenuItem>,
+        );
+        options.push(
+          ...renderFolderOptions((folder as FolderItem).children, level + 1, folder.id),
+        );
+      });
+
+    return options;
+  };
+
   const renderTree = (
     treeItems: TreeItem[],
     level = 0,
@@ -185,7 +241,7 @@ const FolderTree: React.FC<FolderTreeProps> = ({
               onClick={() =>
                 isFolder ? toggleFolder(item.id) : onSelectNote(item.id)
               }
-              draggable
+              draggable={!isFolder} // Only notes are draggable
               onDragStart={(e) =>
                 handleDragStart(e, { id: item.id, type: item.type })
               }
@@ -253,6 +309,12 @@ const FolderTree: React.FC<FolderTreeProps> = ({
                       New Folder
                     </DropdownMenuItem>
                   )}
+                  {!isFolder && (
+                    <DropdownMenuItem onClick={() => openMoveDialog(item)}>
+                      Move to Folder
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem
                     className="text-destructive focus:text-destructive"
                     onClick={() => onDeleteItem(item.id, item.type)}
@@ -358,6 +420,56 @@ const FolderTree: React.FC<FolderTreeProps> = ({
               Cancel
             </Button>
             <Button onClick={handleRenameItem}>Rename</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Move Item Dialog */}
+      <Dialog open={isMoveDialogOpen} onOpenChange={setIsMoveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Move {itemToMove?.type === "folder" ? "Folder" : "Note"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-muted-foreground mb-2">
+              Select a destination folder:
+            </p>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="w-full justify-between">
+                  {targetFolderId
+                    ? folderTree.find((item) => item.id === targetFolderId)?.name
+                    : "Select Folder"}
+                  <FolderOpen className="h-4 w-4 ml-2" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                className="w-56"
+                onCloseAutoFocus={(e) => e.preventDefault()}
+              >
+                <DropdownMenuItem
+                  onClick={() => setTargetFolderId(null)}
+                  className={cn(
+                    "cursor-pointer",
+                    targetFolderId === null && "bg-accent text-accent-foreground",
+                  )}
+                >
+                  <Folder className="h-4 w-4 mr-2 text-muted-foreground" />
+                  Root
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {renderFolderOptions(items)}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsMoveDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleMoveItem}>Move</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

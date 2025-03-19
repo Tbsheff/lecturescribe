@@ -8,6 +8,9 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIU
 // Provide a mock client for development and preview environments
 const isMockEnvironment = !import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+console.log("Supabase URL:", supabaseUrl); // Log the URL
+console.log("Supabase Anon Key:", supabaseAnonKey); // Log the key (be careful with this in production)
+
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
 
 // If we're in a mock environment, we'll intercept the auth methods

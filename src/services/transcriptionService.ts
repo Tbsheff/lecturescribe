@@ -1,16 +1,19 @@
 import { createClient } from '@supabase/supabase-js';
-import { getNote } from './noteStorage';
+import { getNote, saveNote, NoteData, listNotes } from "./noteStorage";
 
 // Initialize Supabase client
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL!;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+// Consistent bucket name to use throughout the app
+const AUDIO_BUCKET = 'audio_uploads';
+
 // Function to transcribe audio using Supabase function
-export const transcribeAudio = async (audioFile: File): Promise<string> => {
+export const transcribeAudio = async (audioFile: File, userId: string): Promise<string> => {
   try {
     // Upload to Supabase storage and get transcription
-    const { transcription } = await processAudioInSupabase(audioFile);
+    const { transcription } = await processAudioInSupabase(audioFile, userId);
     return transcription;
   } catch (error) {
     console.error('Transcription error:', error);
@@ -19,14 +22,23 @@ export const transcribeAudio = async (audioFile: File): Promise<string> => {
 };
 
 // Helper function to process audio in Supabase
-async function processAudioInSupabase(audioFile: File): Promise<{ transcription: string; summary: string; fileUrl: string }> {
+async function processAudioInSupabase(audioFile: File, userId: string): Promise<{ transcription: string; summary: string; fileUrl: string }> {
+  if (!userId) {
+    console.error('processAudioInSupabase: Missing user ID');
+    throw new Error('User ID is required to upload audio files');
+  }
+  
   // Generate a unique filename
-  const filename = `audio_${Date.now()}.${audioFile.name.split('.').pop()}`;
-  const filePath = `temp_audio/${filename}`;
-
+  const timestamp = Date.now();
+  const filename = `audio_${timestamp}.${audioFile.name.split('.').pop()}`;
+  // Include userId in the path for better organization and security
+  const filePath = `${userId}/temp_audio/${filename}`;
+  
+  console.log(`Uploading file for user ${userId}: ${filePath}`);
+  
   // 1. Upload the file to Supabase Storage
   const { data: uploadData, error: uploadError } = await supabase.storage
-    .from('audio_uploads')
+    .from(AUDIO_BUCKET)
     .upload(filePath, audioFile, {
       contentType: audioFile.type,
       cacheControl: '3600',
@@ -39,25 +51,28 @@ async function processAudioInSupabase(audioFile: File): Promise<{ transcription:
 
   // 2. Get a public URL for the file
   const { data: { publicUrl } } = supabase.storage
-    .from('audio_uploads')
+    .from(AUDIO_BUCKET)
     .getPublicUrl(filePath);
 
   // 3. Call the Supabase function with the file URL
   const { data, error } = await supabase.functions.invoke('summarize-audio', {
-    body: { audioUrl: publicUrl }
+    body: { 
+      audioUrl: publicUrl,
+      userId: userId // Pass userId to the function for additional context
+    }
   });
 
   if (error) {
     console.error('Supabase function error:', error);
     
     // Clean up the uploaded file
-    await supabase.storage.from('audio_uploads').remove([filePath]);
+    await supabase.storage.from(AUDIO_BUCKET).remove([filePath]);
     
     throw new Error('Failed to process audio with Supabase function');
   }
 
   // 4. Clean up the uploaded file (optional - you may want to keep it)
-  await supabase.storage.from('audio_uploads').remove([filePath]);
+  await supabase.storage.from(AUDIO_BUCKET).remove([filePath]);
 
   return {
     transcription: data.transcription,
@@ -73,31 +88,27 @@ export const processAudioWithSummary = async (
   metadata: any
 ): Promise<{ transcription: string; summary: string; noteId: string }> => {
   try {
-    // Process the audio using Supabase
-    const { transcription, summary, fileUrl } = await processAudioInSupabase(audioFile);
+    console.log('Processing audio with summary:', { userId, metadata });
     
-    // Save the note with transcription and summary
-    const { data: noteData, error: noteError } = await supabase
-      .from('notes')
-      .insert({
-        user_id: userId,
-        title: metadata.title,
-        transcription,
-        raw_summary: summary,
-        audio_url: fileUrl
-      })
-      .select()
-      .single();
-
-    if (noteError) {
-      console.error('Error saving note:', noteError);
-      throw new Error('Failed to save note');
-    }
+    // Process the audio using Supabase - pass userId
+    const { transcription, summary, fileUrl } = await processAudioInSupabase(audioFile, userId);
+    
+    // Create note data object for storage
+    const noteData: NoteData = {
+      title: metadata.title,
+      transcription: transcription,
+      summary: summary,
+      audioUrl: fileUrl,
+      folderId: metadata.folderId
+    };
+    
+    // Save the note using noteStorage instead of directly to the database
+    const noteId = await saveNote(userId, noteData);
     
     return {
       transcription,
       summary,
-      noteId: noteData.id,
+      noteId
     };
   } catch (error) {
     console.error('Processing error:', error);
@@ -105,21 +116,19 @@ export const processAudioWithSummary = async (
   }
 };
 
-// Update the fetch notes function to handle navigation
-export const fetchNotes = async () => {
+// Update the fetch notes function to use noteStorage's listNotes function
+export const fetchNotes = async (userId: string) => {
   try {
-    const { data, error } = await supabase
-      .from('notes')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-
-    return data.map((note: any) => ({
+    // Use the listNotes function from noteStorage
+    const notesMetadata = await listNotes(userId);
+    
+    // Transform to the expected format
+    return notesMetadata.map((note) => ({
       id: note.id,
       title: note.title || 'Untitled Note',
       date: new Date(note.created_at),
-      preview: note.raw_summary || note.content?.substring(0, 100) || 'No content available'
+      preview: note.preview || 'No content available',
+      folderId: note.folder_id
     }));
   } catch (error) {
     console.error('Error fetching notes:', error);
@@ -127,18 +136,16 @@ export const fetchNotes = async () => {
   }
 };
 
-
 // Function to fetch a single note by ID
 export const fetchNoteById = async (noteId: string) => {
   try {
     const noteData = await getNote(noteId);
 
     if (!noteData) {
-      console.error('Supabase fetch note by ID error: Note not found');
-      throw new Error(`Failed to fetch note by ID ${noteId} from database`);
+      throw new Error(`Failed to fetch note by ID ${noteId} from storage`);
     }
 
-    return noteData;
+        return noteData;
   } catch (error) {
     console.error('Error fetching note by ID:', error);
     throw new Error(`Failed to fetch note by ID ${noteId}`);
