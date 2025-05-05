@@ -1,8 +1,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
-import { AffineEditorContainer } from "@blocksuite/editor";
-import { DocCollection, DocCollectionOptions } from "@blocksuite/store";
-import { PageManager } from "@blocksuite/store";
+import { EditorContainer } from "@blocksuite/editor";
+import { DocCollection } from "@blocksuite/store";
 import * as Y from "yjs";
 
 interface BlockSuiteEditorProps {
@@ -19,7 +18,7 @@ const BlockSuiteEditor: React.FC<BlockSuiteEditorProps> = ({
   onSave,
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
-  const [editor, setEditor] = useState<AffineEditorContainer | null>(null);
+  const [editor, setEditor] = useState<EditorContainer | null>(null);
   const [docCollection, setDocCollection] = useState<DocCollection | null>(null);
   const [pageId, setPageId] = useState<string | null>(null);
 
@@ -28,19 +27,16 @@ const BlockSuiteEditor: React.FC<BlockSuiteEditorProps> = ({
     if (!editorRef.current) return;
     
     // Create a new doc collection with the appropriate ID
-    const options: DocCollectionOptions = {
+    const collection = new DocCollection({
       id: `note-${noteId}`,
-      idGenerator() {
-        return `note-${noteId}-${Date.now()}`;
-      },
-    };
-    
-    const collection = new DocCollection(options);
+      schema: {}, // Add empty schema object to satisfy the API
+    });
     setDocCollection(collection);
 
     // Register the required blocks
-    import('@blocksuite/blocks').then(({ PageBlockSchema, registerAffineSchemas }) => {
-      registerAffineSchemas(collection);
+    import('@blocksuite/blocks').then((blocks) => {
+      // Register the default blocks using the updated API
+      blocks.BlockSchema.register(collection);
       
       // Create a page for this note
       const page = collection.createDoc({ id: `page:${noteId}` });
@@ -49,18 +45,24 @@ const BlockSuiteEditor: React.FC<BlockSuiteEditorProps> = ({
       if (page) {
         // Initialize with default content if it's a new page
         if (!initialContent) {
-          PageBlockSchema.createAndInsert(page);
+          // Create a default page structure with current BlockSuite API
+          page.addBlock('affine:page', {});
+          page.addBlock('affine:surface', {});
+          page.addBlock('affine:note', {});
+          page.addBlock('affine:paragraph', {});
         } else {
-          // TODO: Convert markdown to BlockSuite content
-          // For now, just create a default page
-          PageBlockSchema.createAndInsert(page);
+          // Create a default structure and add a paragraph with the initial content
+          page.addBlock('affine:page', {});
+          page.addBlock('affine:surface', {});
+          page.addBlock('affine:note', {});
+          page.addBlock('affine:paragraph', { text: initialContent });
           
           // In the future, implement markdown to blocksuite conversion
           console.log("Need to convert markdown to BlockSuite content:", initialContent);
         }
 
         // Create and mount the editor
-        const editorContainer = new AffineEditorContainer();
+        const editorContainer = new EditorContainer();
         editorContainer.page = page;
         editorRef.current.innerHTML = '';
         editorRef.current.appendChild(editorContainer);
@@ -69,9 +71,8 @@ const BlockSuiteEditor: React.FC<BlockSuiteEditorProps> = ({
         // Set up auto-saving
         const autoSave = setInterval(() => {
           if (onSave && page) {
-            // For now, we're just converting to JSON
-            // In a real implementation, you'd want a proper serialization format
-            const content = JSON.stringify(page.toJSON());
+            // Use the appropriate serialization method for the current API
+            const content = JSON.stringify(collection.export());
             onSave(content);
           }
         }, 3000);

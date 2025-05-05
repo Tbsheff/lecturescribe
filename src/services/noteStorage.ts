@@ -322,7 +322,7 @@ export const updateNoteTitle = async (
     console.log(`Updating title for note ${noteId}`);
 
     // Get the current note data
-    const note = await getNote(userId, noteId);
+    const note = await getNote(noteId);  // Updated to match getNote's signature
 
     // Update the title
     note.title = newTitle;
@@ -358,7 +358,7 @@ export const updateNoteContent = async (
     console.log(`Updating content for note ${noteId}`);
 
     // Get the current note data
-    const note = await getNote(userId, noteId);
+    const note = await getNote(noteId);  // Updated to match getNote's signature
 
     // Update the content
     note.transcription = content;
