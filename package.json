@@ -13,6 +13,7 @@
   "dependencies": {
     "@blocksuite/blocks": "^0.7.0",
     "@blocksuite/editor": "^0.7.0",
+    "@blocksuite/presets": "^0.0.0-canary-20250316001624",
     "@blocksuite/store": "^0.7.0",
     "@hookform/resolvers": "^3.9.0",
     "@radix-ui/react-accordion": "^1.2.0",
