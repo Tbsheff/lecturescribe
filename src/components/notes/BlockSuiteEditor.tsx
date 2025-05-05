@@ -3,8 +3,8 @@ import React, { useEffect, useRef } from "react";
 import { PageEditor, createEmptyDoc } from "@blocksuite/presets";
 import * as Y from "yjs";
 
-// Import CSS for BlockSuite editor
-import "@blocksuite/presets/themes/affine.css";
+// Import CSS for BlockSuite editor - using direct CSS import that's available in the package
+import "@blocksuite/presets/dist/style.css";
 
 interface BlockSuiteEditorProps {
   noteId: string;
@@ -30,7 +30,7 @@ const BlockSuiteEditor: React.FC<BlockSuiteEditorProps> = ({
     const doc = createEmptyDoc();
     
     // Initialize the document
-    doc.load(() => {
+    doc.init().then(() => {
       if (initialContent) {
         try {
           // Try to parse initialContent as JSON if it's structured BlockSuite content
@@ -43,12 +43,19 @@ const BlockSuiteEditor: React.FC<BlockSuiteEditorProps> = ({
         } catch (e) {
           console.log("No valid JSON content, using as plain text");
           // Get the first paragraph block and update its text content
-          const pageBlockId = doc.addBlock('affine:page');
-          doc.addBlock('affine:surface', {}, pageBlockId);
-          const noteBlockId = doc.addBlock('affine:note', {}, pageBlockId);
-          doc.addBlock('affine:paragraph', { 
-            text: initialContent || 'Start writing here...'
-          }, noteBlockId);
+          const paragraphs = doc.getBlockByFlavour('affine:paragraph');
+          if (paragraphs && paragraphs.length > 0) {
+            const paragraph = paragraphs[0];
+            doc.updateBlock(paragraph, { text: new Y.Text(initialContent || 'Start writing here...') });
+          } else {
+            // If no paragraph blocks exist, create the structure
+            const pageBlockId = doc.addBlock('affine:page');
+            doc.addBlock('affine:surface', {}, pageBlockId);
+            const noteBlockId = doc.addBlock('affine:note', {}, pageBlockId);
+            doc.addBlock('affine:paragraph', {
+              text: new Y.Text(initialContent || 'Start writing here...')
+            }, noteBlockId);
+          }
         }
       }
     });
@@ -66,7 +73,6 @@ const BlockSuiteEditor: React.FC<BlockSuiteEditorProps> = ({
       const autoSave = setInterval(() => {
         try {
           // Use Y.Doc as a simple serialization format
-          const yDoc = new Y.Doc();
           const serialized = JSON.stringify({
             content: Array.from(Y.encodeStateAsUpdate(doc.spaceDoc))
           });
