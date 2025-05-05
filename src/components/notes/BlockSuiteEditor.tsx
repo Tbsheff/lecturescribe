@@ -1,8 +1,11 @@
 
 import React, { useEffect, useRef } from "react";
-import { createEditor } from "@blocksuite/editor";
+import { PageEditor } from "@blocksuite/presets";
 import { Workspace } from "@blocksuite/store";
 import * as Y from "yjs";
+
+// Import CSS for BlockSuite editor
+import "@blocksuite/presets/themes/affine.css";
 
 interface BlockSuiteEditorProps {
   noteId: string;
@@ -19,7 +22,7 @@ const BlockSuiteEditor: React.FC<BlockSuiteEditorProps> = ({
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<Workspace | null>(null);
-  const editorRef2 = useRef<ReturnType<typeof createEditor> | null>(null);
+  const editorInstanceRef = useRef<PageEditor | null>(null);
 
   // Setup the editor
   useEffect(() => {
@@ -67,14 +70,13 @@ const BlockSuiteEditor: React.FC<BlockSuiteEditorProps> = ({
       });
     }
 
-    // Create and mount the editor
-    const editor = createEditor({ 
-      source: page
-    });
+    // Create and mount the editor using PageEditor instead of createEditor
+    const editor = new PageEditor();
+    editor.doc = page;
     
     editorRef.current.innerHTML = '';
     editorRef.current.appendChild(editor);
-    editorRef2.current = editor;
+    editorInstanceRef.current = editor;
 
     // Set up auto-saving
     if (onSave) {
