@@ -1,7 +1,11 @@
+
 import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+
+// Import BlockSuite styles
+import "@blocksuite/editor/dist/style.css";
 
 // Import the dev tools and initialize them conditionally
 try {

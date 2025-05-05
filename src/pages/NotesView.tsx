@@ -23,6 +23,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { format } from "date-fns";
 import { Input } from "@/components/ui/input";
 import NoteEditor from "@/components/notes/NoteEditor";
+import BlockSuiteEditor from "@/components/notes/BlockSuiteEditor";
 
 // React-markdown related imports
 import ReactMarkdown from "react-markdown";
@@ -42,6 +43,7 @@ const NotesView = () => {
   const [newTitle, setNewTitle] = useState("");
   const [isSavingTitle, setIsSavingTitle] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const [editorType, setEditorType] = useState<"markdown" | "blocksuite">("markdown");
 
   useEffect(() => {
     const loadNote = async () => {
@@ -295,15 +297,52 @@ const NotesView = () => {
           <TabsContent value="editor" className="min-h-[60vh]">
             <Card>
               <CardHeader>
-                <CardTitle>Edit Note</CardTitle>
+                <div className="flex justify-between items-center">
+                  <CardTitle>Edit Note</CardTitle>
+                  <div className="flex gap-2">
+                    <Button
+                      variant={editorType === "markdown" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setEditorType("markdown")}
+                    >
+                      Markdown
+                    </Button>
+                    <Button
+                      variant={editorType === "blocksuite" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setEditorType("blocksuite")}
+                    >
+                      BlockSuite
+                    </Button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
-                {note && user && (
+                {note && user && editorType === "markdown" && (
                   <NoteEditor
                     noteId={note.id}
                     userId={user.id}
                     initialContent={note.content || note.transcription || ""}
                   />
+                )}
+                {note && user && editorType === "blocksuite" && (
+                  <div className="h-[60vh]">
+                    <BlockSuiteEditor
+                      noteId={note.id}
+                      userId={user.id}
+                      initialContent={note.content || note.transcription || ""}
+                      onSave={async (content) => {
+                        try {
+                          const { updateNoteContent } = await import("@/services/noteStorage");
+                          await updateNoteContent(user.id, note.id, content);
+                          toast.success("Note saved");
+                        } catch (error: any) {
+                          console.error("Error saving note:", error);
+                          toast.error("Failed to save note");
+                        }
+                      }}
+                    />
+                  </div>
                 )}
               </CardContent>
             </Card>
