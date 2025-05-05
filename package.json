@@ -11,9 +11,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@blocksuite/blocks": "^0.19.5",
-    "@blocksuite/editor": "^0.10.0",
-    "@blocksuite/store": "^0.21.0",
+    "@blocksuite/blocks": "^0.7.0",
+    "@blocksuite/editor": "^0.7.0",
+    "@blocksuite/store": "^0.7.0",
     "@hookform/resolvers": "^3.9.0",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",

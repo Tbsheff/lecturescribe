@@ -329,10 +329,9 @@ export const updateNoteTitle = async (
 
     // Update in Supabase
     const { data, error } = await supabase
-      .from("notes")
+      .from("note_metadata")
       .update({ title: newTitle })
       .eq("id", noteId)
-      .eq("user_id", userId)
       .select()
       .single();
 
@@ -367,10 +366,9 @@ export const updateNoteContent = async (
 
     // Update in Supabase
     const { error } = await supabase
-      .from("notes")
+      .from("note_metadata")
       .update({ transcription: content })
       .eq("id", noteId)
-      .eq("user_id", userId)
       .select()
       .single();
 

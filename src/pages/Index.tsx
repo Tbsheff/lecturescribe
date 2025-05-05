@@ -36,7 +36,7 @@ const Index = () => {
 
       try {
         setIsLoading(true);
-        // Update to call fetchNotes without arguments since the updated function doesn't need them
+        // Call fetchNotes without arguments
         const fetchedNotes = await fetchNotes();
 
         const formattedNotes: Note[] = fetchedNotes.map((note: any) => ({

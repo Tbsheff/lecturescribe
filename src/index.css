@@ -79,6 +79,17 @@
   .blocksuite-editor-container .affine-editor-container {
     height: 100%;
   }
+
+  /* Additional BlockSuite styles */
+  .blocksuite-editor {
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+  }
+
+  .blocksuite-editor * {
+    box-sizing: border-box;
+  }
 }
 
 @layer base {

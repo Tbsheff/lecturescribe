@@ -1,7 +1,7 @@
 
-import React, { useEffect, useRef, useState } from "react";
-import { EditorContainer } from "@blocksuite/editor";
-import { DocCollection } from "@blocksuite/store";
+import React, { useEffect, useRef } from "react";
+import { createEditor } from "@blocksuite/editor";
+import { Workspace } from "@blocksuite/store";
 import * as Y from "yjs";
 
 interface BlockSuiteEditorProps {
@@ -18,82 +18,94 @@ const BlockSuiteEditor: React.FC<BlockSuiteEditorProps> = ({
   onSave,
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
-  const [editor, setEditor] = useState<EditorContainer | null>(null);
-  const [docCollection, setDocCollection] = useState<DocCollection | null>(null);
-  const [pageId, setPageId] = useState<string | null>(null);
+  const workspaceRef = useRef<Workspace | null>(null);
+  const editorRef2 = useRef<ReturnType<typeof createEditor> | null>(null);
 
   // Setup the editor
   useEffect(() => {
     if (!editorRef.current) return;
     
-    // Create a new doc collection with the appropriate ID
-    const collection = new DocCollection({
+    // Create a new workspace
+    const workspace = new Workspace({
       id: `note-${noteId}`,
     });
-    setDocCollection(collection);
-
-    // Register the required blocks
-    import('@blocksuite/blocks').then((blocks) => {
-      // Register all available block schemas
-      blocks.DefaultBlockSchema.register(collection);
-      
-      // Create a page for this note
-      const page = collection.createDoc({ id: `page:${noteId}` });
-      setPageId(page.id);
-      
-      if (page) {
-        // Initialize with default content if it's a new page
-        if (!initialContent) {
-          // Create a default page structure using the current BlockSuite API
-          const pageId = page.addBlock('affine:page');
-          page.addBlock('affine:surface', {}, pageId);
-          const noteId = page.addBlock('affine:note', {}, pageId);
-          page.addBlock('affine:paragraph', {}, noteId);
-        } else {
-          // Create a default structure and add a paragraph with the initial content
-          const pageId = page.addBlock('affine:page');
-          page.addBlock('affine:surface', {}, pageId);
-          const noteId = page.addBlock('affine:note', {}, pageId);
-          page.addBlock('affine:paragraph', {
-            text: [
-              { insert: initialContent }
-            ]
-          }, noteId);
-          
-          console.log("Need to convert markdown to BlockSuite content:", initialContent);
+    workspaceRef.current = workspace;
+    
+    // Create a page for this note
+    const page = workspace.createPage({ id: `page:${noteId}` });
+    
+    if (initialContent) {
+      try {
+        // Try to parse initialContent as JSON if it's structured BlockSuite content
+        const parsedContent = JSON.parse(initialContent);
+        if (parsedContent && typeof parsedContent === 'object') {
+          console.log("Found structured content");
+          // If we have valid JSON, we could try to import it
+          // This is placeholder - actual import would depend on BlockSuite version
         }
-
-        // Create and mount the editor
-        const editorContainer = new EditorContainer();
-        editorContainer.page = page;
-        editorRef.current.innerHTML = '';
-        editorRef.current.appendChild(editorContainer);
-        setEditor(editorContainer);
-
-        // Set up auto-saving
-        const autoSave = setInterval(() => {
-          if (onSave && page) {
-            // Use the appropriate serialization method for the current API
-            const content = JSON.stringify(page.toJSON());
-            onSave(content);
-          }
-        }, 3000);
-
-        return () => {
-          clearInterval(autoSave);
-          if (editorContainer) {
-            editorContainer.remove();
-          }
-        };
+      } catch (e) {
+        console.log("No valid JSON content, using as plain text");
+        // Initialize with default content from the plain text
+        page.load(() => {
+          const pageBlockId = page.addBlock('affine:page');
+          page.addBlock('affine:surface', {}, pageBlockId);
+          const noteBlockId = page.addBlock('affine:note', {}, pageBlockId);
+          page.addBlock('affine:paragraph', { 
+            text: initialContent || 'Start writing here...'
+          }, noteBlockId);
+        });
       }
+    } else {
+      // Initialize with default structure for a new note
+      page.load(() => {
+        const pageBlockId = page.addBlock('affine:page');
+        page.addBlock('affine:surface', {}, pageBlockId);
+        const noteBlockId = page.addBlock('affine:note', {}, pageBlockId);
+        page.addBlock('affine:paragraph', { 
+          text: 'Start writing here...'
+        }, noteBlockId);
+      });
+    }
+
+    // Create and mount the editor
+    const editor = createEditor({ 
+      source: page
     });
     
+    editorRef.current.innerHTML = '';
+    editorRef.current.appendChild(editor);
+    editorRef2.current = editor;
+
+    // Set up auto-saving
+    if (onSave) {
+      const autoSave = setInterval(() => {
+        try {
+          // Use Y.Doc as a simple serialization format
+          const yDoc = new Y.Doc();
+          Y.encodeStateAsUpdate(page.spaceDoc);
+          const serialized = JSON.stringify({
+            content: Array.from(Y.encodeStateAsUpdate(page.spaceDoc))
+          });
+          onSave(serialized);
+        } catch (error) {
+          console.error("Error during auto-save:", error);
+        }
+      }, 3000);
+
+      return () => {
+        clearInterval(autoSave);
+      };
+    }
+
     return () => {
-      if (collection) {
-        // Clean up collection
+      if (editor) {
+        editor.remove();
+      }
+      if (workspace) {
+        workspace.destroy();
       }
     };
-  }, [noteId, initialContent]);
+  }, [noteId, userId, initialContent, onSave]);
 
   return (
     <div className="blocksuite-editor-container" style={{ height: "100%", width: "100%" }}>
