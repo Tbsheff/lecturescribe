@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -35,7 +36,8 @@ const Index = () => {
 
       try {
         setIsLoading(true);
-        const fetchedNotes = await fetchNotes(user.id);
+        // Update to call fetchNotes without arguments since the updated function doesn't need them
+        const fetchedNotes = await fetchNotes();
 
         const formattedNotes: Note[] = fetchedNotes.map((note: any) => ({
           id: note.id,

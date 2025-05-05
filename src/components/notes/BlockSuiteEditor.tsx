@@ -29,14 +29,13 @@ const BlockSuiteEditor: React.FC<BlockSuiteEditorProps> = ({
     // Create a new doc collection with the appropriate ID
     const collection = new DocCollection({
       id: `note-${noteId}`,
-      schema: {}, // Add empty schema object to satisfy the API
     });
     setDocCollection(collection);
 
     // Register the required blocks
     import('@blocksuite/blocks').then((blocks) => {
-      // Register the default blocks using the updated API
-      blocks.BlockSchema.register(collection);
+      // Register all available block schemas
+      blocks.DefaultBlockSchema.register(collection);
       
       // Create a page for this note
       const page = collection.createDoc({ id: `page:${noteId}` });
@@ -45,19 +44,22 @@ const BlockSuiteEditor: React.FC<BlockSuiteEditorProps> = ({
       if (page) {
         // Initialize with default content if it's a new page
         if (!initialContent) {
-          // Create a default page structure with current BlockSuite API
-          page.addBlock('affine:page', {});
-          page.addBlock('affine:surface', {});
-          page.addBlock('affine:note', {});
-          page.addBlock('affine:paragraph', {});
+          // Create a default page structure using the current BlockSuite API
+          const pageId = page.addBlock('affine:page');
+          page.addBlock('affine:surface', {}, pageId);
+          const noteId = page.addBlock('affine:note', {}, pageId);
+          page.addBlock('affine:paragraph', {}, noteId);
         } else {
           // Create a default structure and add a paragraph with the initial content
-          page.addBlock('affine:page', {});
-          page.addBlock('affine:surface', {});
-          page.addBlock('affine:note', {});
-          page.addBlock('affine:paragraph', { text: initialContent });
+          const pageId = page.addBlock('affine:page');
+          page.addBlock('affine:surface', {}, pageId);
+          const noteId = page.addBlock('affine:note', {}, pageId);
+          page.addBlock('affine:paragraph', {
+            text: [
+              { insert: initialContent }
+            ]
+          }, noteId);
           
-          // In the future, implement markdown to blocksuite conversion
           console.log("Need to convert markdown to BlockSuite content:", initialContent);
         }
 
@@ -72,7 +74,7 @@ const BlockSuiteEditor: React.FC<BlockSuiteEditorProps> = ({
         const autoSave = setInterval(() => {
           if (onSave && page) {
             // Use the appropriate serialization method for the current API
-            const content = JSON.stringify(collection.export());
+            const content = JSON.stringify(page.toJSON());
             onSave(content);
           }
         }, 3000);

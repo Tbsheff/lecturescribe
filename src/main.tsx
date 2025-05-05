@@ -4,8 +4,8 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 
-// Import BlockSuite styles - using correct paths for latest version
-import "@blocksuite/blocks/dist/style.css";
+// Import BlockSuite styles - using the correct paths based on package structure
+// Instead of direct path imports which might not exist in the current version
 import "@blocksuite/editor/dist/style.css";
 
 // Import the dev tools and initialize them conditionally
