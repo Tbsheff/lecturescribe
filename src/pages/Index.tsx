@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
-import { fetchNotes } from "@/services/transcriptionService";
+import { fetchNotes } from "@/services/transcription";
 
 type InputMethod = "record" | "upload" | "url";
 
@@ -38,16 +38,12 @@ const Index = () => {
         setIsLoading(true);
 <<<<<<< HEAD
         const fetchedNotes = await fetchNotes(user.id);
-=======
-        // Call fetchNotes without arguments
-        const fetchedNotes = await fetchNotes();
 
->>>>>>> 43fdfc7a3e13bcad9bc58ea2559f81ba26bc7930
         const formattedNotes: Note[] = fetchedNotes.map((note: any) => ({
           id: note.id,
           title: note.title,
           date: new Date(note.created_at),
-          preview: note.preview
+          preview: note.structured_summary?.summary || "No summary available",
         }));
 
         setNotes(formattedNotes);
@@ -76,11 +72,11 @@ const Index = () => {
 
   const filteredNotes = searchQuery
     ? notes.filter(
-        (note) =>
-          note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (note.preview &&
-            note.preview.toLowerCase().includes(searchQuery.toLowerCase())),
-      )
+      (note) =>
+        note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (note.preview &&
+          note.preview.toLowerCase().includes(searchQuery.toLowerCase())),
+    )
     : notes;
 
   // Handle auth redirect in the render phase, not before hooks

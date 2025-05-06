@@ -1,9 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
-import { getNote } from './noteStorage';
 
 // Initialize Supabase client
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL!;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Function to transcribe audio using Supabase function
@@ -74,7 +73,7 @@ export const processAudioWithSummary = async (
 ): Promise<{ transcription: string; summary: string; noteId: string }> => {
   try {
     // Process the audio using Supabase
-    const { transcription, summary, fileUrl } = await processAudioInSupabase(audioFile);
+    const { transcription, summary } = await processAudioInSupabase(audioFile);
     
     // Save the note with transcription and summary
     const { data: noteData, error: noteError } = await supabase
@@ -83,10 +82,8 @@ export const processAudioWithSummary = async (
         user_id: userId,
         title: metadata.title,
         transcription,
-        raw_summary: summary,
-        audio_url: fileUrl
+        summary,
       })
-      .select()
       .single();
 
     if (noteError) {
@@ -102,45 +99,5 @@ export const processAudioWithSummary = async (
   } catch (error) {
     console.error('Processing error:', error);
     throw new Error('Failed to process audio');
-  }
-};
-
-// Update the fetch notes function to handle navigation
-export const fetchNotes = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('notes')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-
-    return data.map((note: any) => ({
-      id: note.id,
-      title: note.title || 'Untitled Note',
-      date: new Date(note.created_at),
-      preview: note.raw_summary || note.content?.substring(0, 100) || 'No content available'
-    }));
-  } catch (error) {
-    console.error('Error fetching notes:', error);
-    throw new Error('Failed to fetch notes');
-  }
-};
-
-
-// Function to fetch a single note by ID
-export const fetchNoteById = async (noteId: string) => {
-  try {
-    const noteData = await getNote(noteId);
-
-    if (!noteData) {
-      console.error('Supabase fetch note by ID error: Note not found');
-      throw new Error(`Failed to fetch note by ID ${noteId} from database`);
-    }
-
-    return noteData;
-  } catch (error) {
-    console.error('Error fetching note by ID:', error);
-    throw new Error(`Failed to fetch note by ID ${noteId}`);
   }
 };

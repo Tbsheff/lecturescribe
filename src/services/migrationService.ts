@@ -12,7 +12,7 @@ export const migrateNotesToBucket = async (
     const errors: string[] = [];
     let migratedCount = 0;
 
-    // Fetch all notes from the database table for this user only
+    // Fetch all notes from the database table
     const { data: notes, error } = await supabase
       .from("notes")
       .select("*")
@@ -28,17 +28,11 @@ export const migrateNotesToBucket = async (
       return { success: true, count: 0, errors };
     }
 
-    console.log(`Found ${notes.length} notes to migrate for user ${userId}`);
+    console.log(`Found ${notes.length} notes to migrate`);
 
     // Process each note
     for (const note of notes) {
       try {
-        // Double-check user ownership
-        if (note.user_id !== userId) {
-          console.error(`Skipping note ${note.id} - ownership mismatch`);
-          continue;
-        }
-
         // Prepare note data for bucket storage
         const noteData: NoteData = {
           id: note.id,
@@ -51,10 +45,10 @@ export const migrateNotesToBucket = async (
           updatedAt: new Date(),
         };
 
-        // Save to bucket storage using the secure saveNote function
+        // Save to bucket storage
         await saveNote(userId, noteData);
         migratedCount++;
-        console.log(`Migrated note ${note.id} for user ${userId}`);
+        console.log(`Migrated note ${note.id}`);
       } catch (noteError: any) {
         console.error(`Error migrating note ${note.id}:`, noteError);
         errors.push(`Note ${note.id}: ${noteError.message}`);

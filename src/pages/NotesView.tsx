@@ -15,8 +15,6 @@ import {
   X,
   FileText,
   Folder,
-  Eye,
-  PenSquare,
 } from "lucide-react";
 import { fetchNoteById } from "@/services/transcriptionService";
 import { toast } from "sonner";
@@ -24,14 +22,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { format } from "date-fns";
 import { Input } from "@/components/ui/input";
-<<<<<<< HEAD
-import AIPageEditor from "@/components/notes/pageEditor";
-import AIGeneratedNotesView from "@/components/notes/AIGeneratedNotesView";
-import { JSONContent } from "novel";
-=======
 import NoteEditor from "@/components/notes/NoteEditor";
-import BlockSuiteEditor from "@/components/notes/BlockSuiteEditor";
->>>>>>> 43fdfc7a3e13bcad9bc58ea2559f81ba26bc7930
 
 // React-markdown related imports
 import ReactMarkdown from "react-markdown";
@@ -39,48 +30,18 @@ import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 
-// Interface for the note object from database
-interface DatabaseNote {
-  id: string;
-  user_id: string;
-  title: string;
-  transcription?: string | null;
-  audio_url?: string | null;
-  created_at: string;
-  raw_summary?: string | null;
-  structured_summary?: any | null; // Using any instead of JSONContent for compatibility
-  content?: string | null;
-  [key: string]: any; // Allow for any additional properties
-}
-
-// Default content for empty notes
-const defaultContent = {
-  type: "doc",
-  content: [
-    {
-      type: "paragraph",
-      content: [{ type: "text", text: "" }]
-    }
-  ]
-};
-
 const NotesView = () => {
   const navigate = useNavigate();
   const { noteId } = useParams();
   const { user } = useAuth();
-  const [note, setNote] = useState<DatabaseNote | null>(null);
+  const [note, setNote] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("editor");
+  const [activeTab, setActiveTab] = useState("summary");
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [isSavingTitle, setIsSavingTitle] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
-  const [editorType, setEditorType] = useState<"markdown" | "blocksuite">("markdown");
-
-  // For AI generated content
-  const [aiGeneratedContent, setAiGeneratedContent] = useState('');
-  const [showAITab, setShowAITab] = useState(false);
 
   useEffect(() => {
     const loadNote = async () => {
@@ -98,40 +59,8 @@ const NotesView = () => {
           return;
         }
 
-        // Ensure note has proper content structure
-        if (!data.content) {
-          data.content = JSON.stringify({
-            type: "doc",
-            content: [
-              {
-                type: "paragraph",
-                content: [{ type: "text", text: data.transcription || "" }]
-              }
-            ]
-          });
-        }
-
-        // Transform the data into a DatabaseNote
-        const noteData: DatabaseNote = {
-          id: data.id || noteId,
-          user_id: user.id,
-          title: data.title || "Untitled Note",
-          transcription: data.transcription || null,
-          audio_url: data.audioUrl || null,
-          created_at: data.createdAt ? new Date(data.createdAt).toISOString() : new Date().toISOString(),
-          raw_summary: data.summary || null,
-          structured_summary: data.structuredSummary || null,
-          content: data.content || null
-        };
-
-        setNote(noteData);
-        setNewTitle(noteData.title);
-
-        // Check if AI notes exist
-        if (noteData.raw_summary) {
-          setAiGeneratedContent(noteData.raw_summary);
-          setShowAITab(true);
-        }
+        setNote(data);
+        setNewTitle(data.title || "");
       } catch (error: any) {
         console.error("Error loading note:", error);
         toast.error(`Failed to load note: ${error.message}`);
@@ -148,7 +77,7 @@ const NotesView = () => {
 
     if (
       !confirm(
-        "Are you sure you want to delete this note? This action cannot be undone."
+        "Are you sure you want to delete this note? This action cannot be undone.",
       )
     ) {
       return;
@@ -223,122 +152,6 @@ const NotesView = () => {
     setIsEditingTitle(false);
   };
 
-  const handleGenerateAINotes = async () => {
-    if (!note || !user) return;
-
-    try {
-      setIsLoading(true);
-
-      // This would be replaced with an actual API call to generate AI notes
-      // For example, using the transcription stored in the note
-      const transcription = note?.transcription || '';
-
-      if (!transcription) {
-        toast.error('No transcription available to generate notes from');
-        return;
-      }
-
-      // In a real implementation, you would send the transcription to an API
-      // and get back AI-generated notes
-      const mockAIGeneratedContent = `# AI Generated Notes for ${note.title}
-
-## Key Points:
-- First important point from the lecture
-- Second important point
-- Third important point
-
-## Summary:
-This lecture covered several important concepts...`;
-
-      // Save the AI notes to the database
-      const { error } = await supabase
-        .from('notes')
-        .update({
-          raw_summary: mockAIGeneratedContent,
-        })
-        .eq('id', noteId)
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-
-      // Update UI
-      setAiGeneratedContent(mockAIGeneratedContent);
-      setShowAITab(true);
-      setActiveTab('ai-notes');
-
-      toast.success('AI notes generated successfully');
-    } catch (error) {
-      console.error('Error generating AI notes:', error);
-      toast.error('Failed to generate AI notes');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleDiscardAINotes = async () => {
-    if (!note || !user) return;
-
-    try {
-      // Clear AI notes from database
-      const { error } = await supabase
-        .from('notes')
-        .update({
-          raw_summary: null,
-          structured_summary: null
-        })
-        .eq('id', noteId)
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-
-      // Update UI
-      setAiGeneratedContent('');
-      setShowAITab(false);
-      setActiveTab('editor');
-
-      toast.success('AI notes discarded');
-    } catch (error) {
-      console.error('Error discarding AI notes:', error);
-      toast.error('Failed to discard AI notes');
-    }
-  };
-
-  const handleSaveComplete = () => {
-    // Refresh the note data after saving
-    if (noteId && user) {
-      const fetchUpdatedNote = async () => {
-        const { data, error } = await supabase
-          .from('notes')
-          .select('*')
-          .eq('id', noteId)
-          .eq('user_id', user.id)
-          .single();
-
-        if (error) {
-          console.error('Error refreshing note:', error);
-          return;
-        }
-
-        if (data) {
-          // Convert database row to DatabaseNote format
-          const updatedNote: DatabaseNote = {
-            id: data.id,
-            user_id: data.user_id,
-            title: data.title || "Untitled Note",
-            transcription: data.transcription,
-            audio_url: data.audio_url,
-            created_at: data.created_at,
-            raw_summary: data.raw_summary,
-            structured_summary: data.structured_summary,
-          };
-          setNote(updatedNote);
-        }
-      };
-
-      fetchUpdatedNote();
-    }
-  };
-
   if (isLoading) {
     return (
       <MainLayout>
@@ -358,8 +171,12 @@ This lecture covered several important concepts...`;
             The note you're looking for doesn't exist or you don't have access
             to it.
           </p>
-          <Button onClick={() => navigate("/")} className="mt-4">
-            <ArrowLeft className="w-4 h-4 mr-2" />
+          <Button
+            variant="outline"
+            className="mt-4"
+            onClick={() => navigate("/")}
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Home
           </Button>
         </div>
@@ -367,235 +184,242 @@ This lecture covered several important concepts...`;
     );
   }
 
+  const formattedDate = note.created_at
+    ? format(new Date(note.created_at), "PP")
+    : "";
+
   return (
     <MainLayout>
-      <div className="container py-8 max-w-7xl mx-auto">
-        <div className="flex items-center mb-6 flex-wrap gap-4">
+      <div className="container max-w-4xl mx-auto">
+        <div className="flex items-center justify-between mb-6">
           <Button
             variant="outline"
-            size="sm"
             onClick={() => navigate("/")}
-            className="mr-4"
+            className="gap-2"
           >
-            <ArrowLeft className="w-4 h-4 mr-2" />
+            <ArrowLeft className="h-4 w-4" />
             Back
           </Button>
 
-          {isEditingTitle ? (
-            <div className="flex items-center gap-2 flex-1">
-              <Input
-                ref={titleInputRef}
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                className="text-xl font-bold h-10 max-w-md"
-                placeholder="Enter note title"
-              />
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleSaveTitle}
-                disabled={isSavingTitle}
-              >
-                {isSavingTitle ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Check className="w-4 h-4 text-green-500" />
-                )}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleCancelEditTitle}
-                disabled={isSavingTitle}
-              >
-                <X className="w-4 h-4 text-red-500" />
-              </Button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 flex-1">
-              <h1 className="text-2xl font-bold truncate">
-                {note.title || "Untitled Note"}
-              </h1>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleEditTitle}
-                className="ml-2"
-              >
-                <Edit className="w-4 h-4" />
-              </Button>
-            </div>
-          )}
-
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex gap-2">
             {note.audio_url && (
               <Button
                 variant="outline"
-                size="sm"
                 onClick={handleDownloadAudio}
+                className="gap-2"
               >
-                <Download className="w-4 h-4 mr-2" />
-                Audio
-              </Button>
-            )}
-
-            {!showAITab && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleGenerateAINotes}
-                disabled={isLoading}
-              >
-                <PenSquare className="w-4 h-4 mr-2" />
-                Generate AI Notes
+                <Download className="h-4 w-4" />
+                Download Audio
               </Button>
             )}
 
             <Button
               variant="destructive"
-              size="sm"
               onClick={handleDelete}
+              className="gap-2"
               disabled={isDeleting}
             >
               {isDeleting ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <Trash2 className="w-4 h-4 mr-2" />
+                <Trash2 className="h-4 w-4" />
               )}
-              Delete Note
+              Delete
             </Button>
           </div>
         </div>
 
-        <div className="text-sm text-muted-foreground mb-6">
-          {note.created_at && (
-            <div>
-              Created{" "}
-              {format(
-                new Date(note.created_at),
-                "MMM d, yyyy 'at' h:mm a"
-              )}
+        <div className="mb-6">
+          {isEditingTitle ? (
+            <div className="flex items-center gap-2 mb-2">
+              <Input
+                ref={titleInputRef}
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                className="text-2xl font-bold h-auto py-1 px-2"
+                placeholder="Enter note title"
+                onKeyDown={(e) => e.key === "Enter" && handleSaveTitle()}
+              />
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleSaveTitle}
+                disabled={isSavingTitle}
+              >
+                {isSavingTitle ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4" />
+                )}
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleCancelEditTitle}
+                disabled={isSavingTitle}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 mb-2 group">
+              <h1 className="text-3xl font-bold">{note.title}</h1>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={handleEditTitle}
+              >
+                <Edit className="h-4 w-4" />
+              </Button>
             </div>
           )}
+          <p className="text-muted-foreground">{formattedDate}</p>
         </div>
 
         <Tabs
+          defaultValue="summary"
           value={activeTab}
           onValueChange={setActiveTab}
-          className="space-y-4"
+          className="mb-8"
         >
-          <TabsList>
-            <TabsTrigger value="editor">Notes Editor</TabsTrigger>
-            <TabsTrigger value="ai-notes" disabled={!showAITab}>
-              AI Notes
-            </TabsTrigger>
-            {note.transcription && (
-              <TabsTrigger value="transcript">Full Transcript</TabsTrigger>
+          <TabsList className="mb-6">
+            <TabsTrigger value="editor">Editor</TabsTrigger>
+            <TabsTrigger value="summary">AI Summary</TabsTrigger>
+            <TabsTrigger value="transcript">Full Transcript</TabsTrigger>
+            {note.audio_url && (
+              <TabsTrigger value="audio">Audio Player</TabsTrigger>
             )}
-            {note.audio_url && <TabsTrigger value="audio">Audio</TabsTrigger>}
           </TabsList>
 
-          <TabsContent value="editor">
+          <TabsContent value="editor" className="min-h-[60vh]">
             <Card>
               <CardHeader>
-<<<<<<< HEAD
-                <CardTitle>Note Editor</CardTitle>
+                <CardTitle>Edit Note</CardTitle>
               </CardHeader>
               <CardContent>
                 {note && user && (
-                  <AIPageEditor
-                    initialAIContent={
-                      note.structured_summary ||
-                      {
-                        type: "doc",
-                        content: [
-                          {
-                            type: "paragraph",
-                            content: [{ type: "text", text: note.transcription || "" }]
-                          }
-                        ]
-                      }
-                    }
-                    onSave={async (html, json, markdown) => {
-                      // Save the updated notes
-                      const { error } = await supabase
-                        .from('notes')
-                        .update({
-                          raw_summary: markdown,
-                          structured_summary: json
-                        })
-                        .eq('id', note.id)
-                        .eq('user_id', user.id);
-
-                      if (error) {
-                        toast.error('Failed to save notes');
-                        throw error;
-                      }
-                    }}
-=======
-                <div className="flex justify-between items-center">
-                  <CardTitle>Edit Note</CardTitle>
-                  <div className="flex gap-2">
-                    <Button
-                      variant={editorType === "markdown" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setEditorType("markdown")}
-                    >
-                      Markdown
-                    </Button>
-                    <Button
-                      variant={editorType === "blocksuite" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setEditorType("blocksuite")}
-                    >
-                      BlockSuite
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {note && user && editorType === "markdown" && (
                   <NoteEditor
                     noteId={note.id}
                     userId={user.id}
                     initialContent={note.content || note.transcription || ""}
->>>>>>> 43fdfc7a3e13bcad9bc58ea2559f81ba26bc7930
                   />
-                )}
-                {note && user && editorType === "blocksuite" && (
-                  <div className="h-[60vh]">
-                    <BlockSuiteEditor
-                      noteId={note.id}
-                      userId={user.id}
-                      initialContent={note.content || note.transcription || ""}
-                      onSave={async (content) => {
-                        try {
-                          const { updateNoteContent } = await import("@/services/noteStorage");
-                          await updateNoteContent(user.id, note.id, content);
-                          toast.success("Note saved");
-                        } catch (error: any) {
-                          console.error("Error saving note:", error);
-                          toast.error("Failed to save note");
-                        }
-                      }}
-                    />
-                  </div>
                 )}
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="ai-notes">
+          <TabsContent value="summary" className="min-h-[60vh]">
             <Card>
-              <CardContent className="p-6">
-                {showAITab && (
-                  <AIGeneratedNotesView
-                    noteId={note.id}
-                    userId={user.id}
-                    aiGeneratedContent={aiGeneratedContent}
-                    onSaveComplete={handleSaveComplete}
-                    onDiscardAINotes={handleDiscardAINotes}
-                  />
+              <CardHeader>
+                <CardTitle>Summary</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {note.structured_summary ? (
+                  <div className="space-y-6">
+                    {note.structured_summary.summary && (
+                      <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-xl prose-h2:text-lg prose-h3:text-base prose-a:text-brand hover:prose-a:text-brand-dark prose-img:rounded-md prose-img:mx-auto">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          rehypePlugins={[rehypeRaw, rehypeSanitize]}
+                        >
+                          {note.structured_summary.summary}
+                        </ReactMarkdown>
+                      </div>
+                    )}
+
+                    {note.structured_summary.keyPoints &&
+                      note.structured_summary.keyPoints.length > 0 && (
+                        <div>
+                          <h3 className="text-lg font-medium mb-2">
+                            Key Points
+                          </h3>
+                          <ul className="list-disc pl-6 space-y-1">
+                            {note.structured_summary.keyPoints.map(
+                              (point: string, index: number) => (
+                                <li
+                                  key={index}
+                                  className="prose prose-sm dark:prose-invert prose-a:text-brand hover:prose-a:text-brand-dark"
+                                >
+                                  <ReactMarkdown
+                                    remarkPlugins={[remarkGfm]}
+                                    rehypePlugins={[rehypeRaw, rehypeSanitize]}
+                                  >
+                                    {point}
+                                  </ReactMarkdown>
+                                </li>
+                              ),
+                            )}
+                          </ul>
+                        </div>
+                      )}
+
+                    {note.structured_summary.sections &&
+                      note.structured_summary.sections.length > 0 && (
+                        <div className="space-y-6 pt-4">
+                          {note.structured_summary.sections.map(
+                            (section: any, index: number) => (
+                              <div key={index} className="space-y-3">
+                                <h3 className="text-lg font-medium">
+                                  {section.title}
+                                </h3>
+
+                                {section.content && (
+                                  <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-xl prose-h2:text-lg prose-h3:text-base prose-a:text-brand hover:prose-a:text-brand-dark prose-img:rounded-md prose-img:mx-auto prose-code:bg-muted prose-code:p-1 prose-code:rounded prose-code:text-sm">
+                                    <ReactMarkdown
+                                      remarkPlugins={[remarkGfm]}
+                                      rehypePlugins={[
+                                        rehypeRaw,
+                                        rehypeSanitize,
+                                      ]}
+                                    >
+                                      {section.content}
+                                    </ReactMarkdown>
+                                  </div>
+                                )}
+
+                                {section.subsections &&
+                                  section.subsections.length > 0 && (
+                                    <div className="space-y-4 pl-4 border-l-2 border-muted mt-4">
+                                      {section.subsections.map(
+                                        (subsection: any, subIndex: number) => (
+                                          <div key={subIndex} className="pl-4">
+                                            <h4 className="text-base font-medium mb-2">
+                                              {subsection.title}
+                                            </h4>
+                                            <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:font-semibold prose-a:text-brand hover:prose-a:text-brand-dark prose-img:rounded-md prose-img:mx-auto prose-code:bg-muted prose-code:p-1 prose-code:rounded prose-code:text-sm">
+                                              <ReactMarkdown
+                                                remarkPlugins={[remarkGfm]}
+                                                rehypePlugins={[
+                                                  rehypeRaw,
+                                                  rehypeSanitize,
+                                                ]}
+                                              >
+                                                {subsection.content}
+                                              </ReactMarkdown>
+                                            </div>
+                                          </div>
+                                        ),
+                                      )}
+                                    </div>
+                                  )}
+                              </div>
+                            ),
+                          )}
+                        </div>
+                      )}
+                  </div>
+                ) : note.raw_summary ? (
+                  <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-xl prose-h2:text-lg prose-h3:text-base prose-a:text-brand hover:prose-a:text-brand-dark prose-img:rounded-md prose-img:mx-auto prose-code:bg-muted prose-code:p-1 prose-code:rounded prose-code:text-sm">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      rehypePlugins={[rehypeRaw, rehypeSanitize]}
+                    >
+                      {note.raw_summary}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">No summary available</p>
                 )}
               </CardContent>
             </Card>
