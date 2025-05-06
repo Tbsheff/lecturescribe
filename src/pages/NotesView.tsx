@@ -24,9 +24,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { format } from "date-fns";
 import { Input } from "@/components/ui/input";
+<<<<<<< HEAD
 import AIPageEditor from "@/components/notes/pageEditor";
 import AIGeneratedNotesView from "@/components/notes/AIGeneratedNotesView";
 import { JSONContent } from "novel";
+=======
+import NoteEditor from "@/components/notes/NoteEditor";
+import BlockSuiteEditor from "@/components/notes/BlockSuiteEditor";
+>>>>>>> 43fdfc7a3e13bcad9bc58ea2559f81ba26bc7930
 
 // React-markdown related imports
 import ReactMarkdown from "react-markdown";
@@ -71,6 +76,7 @@ const NotesView = () => {
   const [newTitle, setNewTitle] = useState("");
   const [isSavingTitle, setIsSavingTitle] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const [editorType, setEditorType] = useState<"markdown" | "blocksuite">("markdown");
 
   // For AI generated content
   const [aiGeneratedContent, setAiGeneratedContent] = useState('');
@@ -492,6 +498,7 @@ This lecture covered several important concepts...`;
           <TabsContent value="editor">
             <Card>
               <CardHeader>
+<<<<<<< HEAD
                 <CardTitle>Note Editor</CardTitle>
               </CardHeader>
               <CardContent>
@@ -525,7 +532,54 @@ This lecture covered several important concepts...`;
                         throw error;
                       }
                     }}
+=======
+                <div className="flex justify-between items-center">
+                  <CardTitle>Edit Note</CardTitle>
+                  <div className="flex gap-2">
+                    <Button
+                      variant={editorType === "markdown" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setEditorType("markdown")}
+                    >
+                      Markdown
+                    </Button>
+                    <Button
+                      variant={editorType === "blocksuite" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setEditorType("blocksuite")}
+                    >
+                      BlockSuite
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {note && user && editorType === "markdown" && (
+                  <NoteEditor
+                    noteId={note.id}
+                    userId={user.id}
+                    initialContent={note.content || note.transcription || ""}
+>>>>>>> 43fdfc7a3e13bcad9bc58ea2559f81ba26bc7930
                   />
+                )}
+                {note && user && editorType === "blocksuite" && (
+                  <div className="h-[60vh]">
+                    <BlockSuiteEditor
+                      noteId={note.id}
+                      userId={user.id}
+                      initialContent={note.content || note.transcription || ""}
+                      onSave={async (content) => {
+                        try {
+                          const { updateNoteContent } = await import("@/services/noteStorage");
+                          await updateNoteContent(user.id, note.id, content);
+                          toast.success("Note saved");
+                        } catch (error: any) {
+                          console.error("Error saving note:", error);
+                          toast.error("Failed to save note");
+                        }
+                      }}
+                    />
+                  </div>
                 )}
               </CardContent>
             </Card>

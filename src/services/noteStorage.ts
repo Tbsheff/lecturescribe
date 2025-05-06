@@ -333,13 +333,13 @@ export const deleteNote = async (
 };
 
 /**
- * Update a note's title
+ * Update the title of a note
  */
 export const updateNoteTitle = async (
   userId: string,
   noteId: string,
-  newTitle: string,
-): Promise<void> => {
+  newTitle: string
+) => {
   try {
     console.log(`Updating title for note ${noteId}`);
 
@@ -349,33 +349,34 @@ export const updateNoteTitle = async (
     // Update the title
     note.title = newTitle;
 
-    // Save the updated note
-    await saveNote(userId, note);
-
-    // Update just the title in the metadata table for efficiency
-    const { error: updateError } = await supabase
+    // Update in Supabase
+    const { data, error } = await supabase
       .from("note_metadata")
-      .update({ title: newTitle, updated_at: new Date().toISOString() })
-      .eq("id", noteId);
+      .update({ title: newTitle })
+      .eq("id", noteId)
+      .select()
+      .single();
 
-    if (updateError) {
-      console.error("Error updating note title in metadata:", updateError);
-      throw new Error(`Failed to update note title: ${updateError.message}`);
+    if (error) {
+      console.error("Error updating note title:", error);
+      throw new Error(`Failed to update note title: ${error.message}`);
     }
-  } catch (error) {
+
+    return data;
+  } catch (error: any) {
     console.error("Error in updateNoteTitle:", error);
-    throw error;
+    throw new Error(`Failed to update note title: ${error.message}`);
   }
 };
 
 /**
- * Update a note's content
+ * Update the content of a note
  */
 export const updateNoteContent = async (
   userId: string,
   noteId: string,
-  content: string,
-): Promise<void> => {
+  content: string
+) => {
   try {
     console.log(`Updating content for note ${noteId}`);
 
@@ -385,11 +386,21 @@ export const updateNoteContent = async (
     // Update the content
     note.content = content;
 
-    // Save the updated note
-    await saveNote(userId, note);
-  } catch (error) {
+    // Update in Supabase
+    const { error } = await supabase
+      .from("note_metadata")
+      .update({ transcription: content })
+      .eq("id", noteId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error updating note content:", error);
+      throw new Error(`Failed to update note content: ${error.message}`);
+    }
+  } catch (error: any) {
     console.error("Error in updateNoteContent:", error);
-    throw error;
+    throw new Error(`Failed to update note content: ${error.message}`);
   }
 };
 

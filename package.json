@@ -11,6 +11,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@blocksuite/blocks": "^0.7.0",
+    "@blocksuite/editor": "^0.7.0",
+    "@blocksuite/presets": "^0.0.0-canary-20250316001624",
+    "@blocksuite/store": "^0.7.0",
     "@hookform/resolvers": "^3.9.0",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",
@@ -41,6 +45,7 @@
     "@radix-ui/react-tooltip": "^1.1.4",
     "@supabase/supabase-js": "^2.49.1",
     "@tanstack/react-query": "^5.56.2",
+<<<<<<< HEAD
     "@tiptap/core": "^2.11.5",
     "@tiptap/extension-blockquote": "^2.11.5",
     "@tiptap/extension-bold": "^2.11.5",
@@ -58,6 +63,9 @@
     "@tiptap/extension-text": "^2.11.5",
     "@tiptap/pm": "^2.11.5",
     "@tiptap/starter-kit": "^2.11.5",
+=======
+    "@types/flexsearch": "^0.7.6",
+>>>>>>> 43fdfc7a3e13bcad9bc58ea2559f81ba26bc7930
     "@types/uuid": "^10.0.0",
     "ai": "^4.1.61",
     "class-variance-authority": "^0.7.1",
