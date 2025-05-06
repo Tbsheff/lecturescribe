@@ -4,7 +4,7 @@ import { PageEditor, createEmptyDoc } from "@blocksuite/presets";
 import * as Y from "yjs";
 
 // Import CSS for BlockSuite editor - using direct CSS import that's available in the package
-import "@blocksuite/presets/dist/style.css";
+// Note: We've moved this to index.css to avoid direct import issues
 
 interface BlockSuiteEditorProps {
   noteId: string;
