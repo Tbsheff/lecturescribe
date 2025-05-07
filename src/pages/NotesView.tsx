@@ -22,7 +22,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { format } from "date-fns";
 import { Input } from "@/components/ui/input";
-import NoteEditor from "@/components/notes/NoteEditor";
+
 
 // React-markdown related imports
 import ReactMarkdown from "react-markdown";
@@ -284,7 +284,7 @@ const NotesView = () => {
           className="mb-8"
         >
           <TabsList className="mb-6">
-            <TabsTrigger value="editor">Editor</TabsTrigger>
+            <TabsTrigger value="notes">Editor</TabsTrigger>
             <TabsTrigger value="summary">AI Summary</TabsTrigger>
             <TabsTrigger value="transcript">Full Transcript</TabsTrigger>
             {note.audio_url && (
@@ -292,21 +292,8 @@ const NotesView = () => {
             )}
           </TabsList>
 
-          <TabsContent value="editor" className="min-h-[60vh]">
-            <Card>
-              <CardHeader>
-                <CardTitle>Edit Note</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {note && user && (
-                  <NoteEditor
-                    noteId={note.id}
-                    userId={user.id}
-                    initialContent={note.content || note.transcription || ""}
-                  />
-                )}
-              </CardContent>
-            </Card>
+          <TabsContent value="notes" className="mt-0 border-none h-full" style={{ minHeight: "500px" }}>
+
           </TabsContent>
 
           <TabsContent value="summary" className="min-h-[60vh]">

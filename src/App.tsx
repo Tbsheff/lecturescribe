@@ -10,6 +10,7 @@ import Auth from "./pages/Auth";
 import NotesView from "./pages/NotesView";
 import HowToUse from "./pages/HowToUse";
 import Settings from "./pages/Settings";
+import EditorPage from "./pages/EditorPage";
 import NotFound from "./pages/NotFound";
 
 // Lazy-loaded components
@@ -37,6 +38,7 @@ const App = () => {
               <Route path="/how-to-use" element={<HowToUse />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/audio-summary" element={<Index />} />
+              <Route path="/editor" element={<EditorPage />} />
               <Route
                 path="/migrate"
                 element={

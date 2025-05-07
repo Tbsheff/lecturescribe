@@ -30,5 +30,25 @@ export default defineConfig(({ mode }) => {
         "@": path.resolve(__dirname, "./src"),
       },
     },
+    optimizeDeps: {
+      esbuildOptions: {
+        // Used for BlockSuite which depends on these features
+        target: 'esnext',
+        supported: {
+          bigint: true
+        },
+      },
+      include: [
+        '@blocksuite/store',
+        '@blocksuite/blocks',
+        '@blocksuite/presets',
+      ],
+    },
+    build: {
+      target: 'esnext',
+      commonjsOptions: {
+        transformMixedEsModules: true,
+      },
+    }
   };
 });

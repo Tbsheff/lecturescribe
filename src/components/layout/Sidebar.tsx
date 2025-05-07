@@ -10,6 +10,7 @@ import {
   Headphones,
   ArrowRight,
   Folder,
+  Edit,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -34,9 +35,19 @@ export const Sidebar = () => {
       path: "/audio-summary",
     },
     {
+      name: "Enhanced Editor",
+      icon: <Edit className="h-5 w-5" />,
+      path: "/editor",
+    },
+    {
       name: "How to use",
       icon: <Rocket className="h-5 w-5" />,
       path: "/how-to-use",
+    },
+    {
+      name: "BlockSuite Demo",
+      icon: <Edit className="h-5 w-5" />,
+      path: "/blocksuite-demo",
     },
     {
       name: "Settings",

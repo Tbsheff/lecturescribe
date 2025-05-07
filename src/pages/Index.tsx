@@ -36,7 +36,6 @@ const Index = () => {
 
       try {
         setIsLoading(true);
-<<<<<<< HEAD
         const fetchedNotes = await fetchNotes(user.id);
 
         const formattedNotes: Note[] = fetchedNotes.map((note: any) => ({
