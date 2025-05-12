@@ -49,6 +49,15 @@
     --ring: 222.2 84% 4.9%;
 
     --radius: 0.5rem;
+    
+    /* Brand color */
+    --brand: 262.1 83.3% 57.8%; /* #6c5ce7 */
+    
+    /* Sidebar colors */
+    --sidebar: 0 0% 100%;
+    --sidebar-foreground: 222.2 84% 4.9%;
+    --sidebar-accent: 262.1 83.3% 57.8%;
+    --sidebar-accent-foreground: 0 0% 100%;
   }
 
   .dark {
@@ -79,6 +88,15 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
+    
+    /* Brand color - same in dark mode */
+    --brand: 262.1 83.3% 57.8%;
+    
+    /* Sidebar colors for dark mode */
+    --sidebar: 222.2 84% 4.9%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-accent: 262.1 83.3% 57.8%;
+    --sidebar-accent-foreground: 210 40% 98%;
   }
 }
 
