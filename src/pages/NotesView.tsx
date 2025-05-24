@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -22,7 +21,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { format } from "date-fns";
 import { Input } from "@/components/ui/input";
-
 
 // React-markdown related imports
 import ReactMarkdown from "react-markdown";
@@ -154,17 +152,17 @@ const NotesView = () => {
 
   if (isLoading) {
     return (
-      <MainLayout>
+      <>
         <div className="flex justify-center items-center min-h-[60vh]">
           <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
         </div>
-      </MainLayout>
+      </>
     );
   }
 
   if (!note) {
     return (
-      <MainLayout>
+      <>
         <div className="text-center py-12">
           <h2 className="text-2xl font-bold">Note not found</h2>
           <p className="text-muted-foreground mt-2">
@@ -180,7 +178,7 @@ const NotesView = () => {
             Back to Home
           </Button>
         </div>
-      </MainLayout>
+      </>
     );
   }
 
@@ -189,7 +187,7 @@ const NotesView = () => {
     : "";
 
   return (
-    <MainLayout>
+    <>
       <div className="container max-w-4xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <Button
@@ -468,7 +466,7 @@ const NotesView = () => {
           )}
         </Tabs>
       </div>
-    </MainLayout>
+    </>
   );
 };
 

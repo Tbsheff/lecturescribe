@@ -1,7 +1,5 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
-import { MainLayout } from "@/components/layout/MainLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AudioInputCard } from "@/components/ui/AudioInputCard";
 import { AudioRecorder } from "@/components/audio/AudioRecorder";
@@ -84,7 +82,7 @@ const Index = () => {
   }
 
   return (
-    <MainLayout>
+    <>
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold gradient-text">
@@ -218,7 +216,7 @@ const Index = () => {
           )}
         </div>
       </div>
-    </MainLayout>
+    </>
   );
 };
 

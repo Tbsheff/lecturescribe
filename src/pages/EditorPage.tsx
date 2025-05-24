@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MainLayout } from '@/components/layout/MainLayout';
+// MainLayout removed
 import EditorComponent from '@/components/editor/EnhancedEditor';
 import CoverDisplay from '@/components/editor/CoverDisplay';
 import { Button } from '@/components/ui/button';
@@ -57,7 +57,7 @@ const EditorPage: React.FC = () => {
     };
 
     return (
-        <MainLayout>
+        <>
             <div className="w-full h-full flex flex-col items-center">
                 <div className="w-full max-w-5xl mb-4">
                     <CoverDisplay
@@ -79,7 +79,7 @@ const EditorPage: React.FC = () => {
                     <EditorComponent />
                 </div>
             </div>
-        </MainLayout>
+        </>
     );
 };
 

@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { MainLayout } from '@/components/layout/MainLayout';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -27,7 +26,7 @@ const Settings = () => {
   };
   
   return (
-    <MainLayout>
+    <>
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold mb-2 gradient-text">Settings</h1>
         <p className="text-muted-foreground mb-8">
@@ -160,7 +159,7 @@ const Settings = () => {
           </div>
         </div>
       </div>
-    </MainLayout>
+    </>
   );
 };
 

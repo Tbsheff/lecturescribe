@@ -1,5 +1,4 @@
 import React from 'react';
-import { MainLayout } from '@/components/layout/MainLayout';
 import { Separator } from '@/components/ui/separator';
 import { Mic, Upload, FileText, Glasses, Download } from 'lucide-react';
 
@@ -28,7 +27,7 @@ const HowToUse = () => {
   ];
 
   return (
-    <MainLayout>
+    <>
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold mb-2 gradient-text">How to Use LectureScribe</h1>
         <p className="text-muted-foreground mb-8">
@@ -88,7 +87,7 @@ const HowToUse = () => {
           </div>
         </div>
       </div>
-    </MainLayout>
+    </>
   );
 };
 

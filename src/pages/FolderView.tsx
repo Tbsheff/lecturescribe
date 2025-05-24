@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { MainLayout } from "@/components/layout/MainLayout";
 import FolderTree, {
   FolderItem,
   NoteItem,
@@ -177,7 +176,7 @@ const FolderView = () => {
   };
 
   return (
-    <MainLayout>
+    <>
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center">
@@ -285,7 +284,7 @@ const FolderView = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </MainLayout>
+    </>
   );
 };
 

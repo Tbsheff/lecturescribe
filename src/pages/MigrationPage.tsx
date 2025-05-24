@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { MainLayout } from "@/components/layout/MainLayout";
 import {
   Card,
   CardContent,
@@ -57,7 +56,7 @@ const MigrationPage = () => {
   };
 
   return (
-    <MainLayout>
+    <>
       <div className="max-w-3xl mx-auto">
         <h1 className="text-3xl font-bold mb-2 gradient-text">
           Storage Migration
@@ -150,7 +149,7 @@ const MigrationPage = () => {
           </CardContent>
         </Card>
       </div>
-    </MainLayout>
+    </>
   );
 };
 
