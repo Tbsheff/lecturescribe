@@ -1,5 +1,9 @@
 # Welcome to your Lovable project
 
+![CI/CD Pipeline](https://github.com/tyler/lecturescribe/workflows/CI%2FCD%20Pipeline/badge.svg)
+[![codecov](https://codecov.io/gh/tyler/lecturescribe/branch/main/graph/badge.svg)](https://codecov.io/gh/tyler/lecturescribe)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+
 ## Project info
 
 **URL**: https://lovable.dev/projects/feb117f8-e8ff-41c6-9a25-84671e041714

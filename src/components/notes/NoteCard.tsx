@@ -23,7 +23,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onClick }) => {
     >
       <CardContent className="p-4 flex items-center">
         <div className="bg-secondary rounded-md p-2 mr-3">
-          <FileText className="h-5 w-5 text-brand" />
+          <FileText className="h-5 w-5 text-brand" data-testid="file-text-icon" />
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="font-medium text-foreground truncate">{note.title}</h3>
@@ -40,7 +40,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onClick }) => {
             </p>
           )}
         </div>
-        <ChevronRight className="h-5 w-5 text-muted-foreground" />
+        <ChevronRight className="h-5 w-5 text-muted-foreground" data-testid="chevron-right-icon" />
       </CardContent>
     </Card>
   );

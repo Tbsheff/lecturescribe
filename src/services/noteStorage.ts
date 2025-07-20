@@ -47,6 +47,7 @@ export const saveNote = async (
     // Prepare the note data
     const noteContent = {
       id: noteId,
+      user_id: userId,
       title: noteData.title,
       transcription: noteData.transcription, // Ensure transcription is saved
       summary: noteData.summary,
@@ -142,7 +143,7 @@ export const saveNote = async (
  */
 export const getNote = async (
   noteId: string,
-): Promise<NoteData> => {
+): Promise<NoteData | null> => {
   try {
     const { data: user, error: userError } = await supabase.auth.getUser();
 
@@ -163,8 +164,18 @@ export const getNote = async (
       .download(notePath);
 
     if (noteError) {
+      // If note doesn't exist, return null instead of throwing
+      const isNotFound = noteError.originalError?.status === 404 || 
+                        noteError.originalError?.status === 400 ||
+                        noteError.name === 'StorageUnknownError';
+      
+      if (isNotFound) {
+        return null;
+      }
+      
+      const errorMessage = noteError.message || JSON.stringify(noteError);
       console.error("Error downloading note:", noteError);
-      throw new Error(`Failed to download note: ${noteError.message}`);
+      throw new Error(`Failed to download note: ${errorMessage}`);
     }
 
     // Parse the JSON data
@@ -322,22 +333,45 @@ export const updateNoteTitle = async (
     console.log(`Updating title for note ${noteId}`);
 
     // Get the current note data
-    const note = await getNote(userId, noteId);
+    const note = await getNote(noteId);
+    if (!note) {
+      throw new Error("Note not found");
+    }
 
     // Update the title
     note.title = newTitle;
+    note.updatedAt = new Date().toISOString();
 
-    // Update in Supabase
-    const { data, error } = await supabase
-      .from("note_metadata")
-      .update({ title: newTitle })
-      .eq("id", noteId)
-      .select()
-      .single();
+    // Save the updated note back to storage
+    const notePath = `${userId}/${noteId}/note.json`;
+    const noteJson = JSON.stringify(note, null, 2);
+
+    const { error } = await supabase.storage
+      .from("notes")
+      .upload(notePath, noteJson, {
+        contentType: "application/json",
+        upsert: true,
+      });
 
     if (error) {
       console.error("Error updating note title:", error);
       throw new Error(`Failed to update note title: ${error.message}`);
+    }
+
+    // Update the title in metadata
+    const { data, error: metadataError } = await supabase
+      .from("note_metadata")
+      .update({ 
+        title: newTitle,
+        updated_at: new Date().toISOString() 
+      })
+      .eq("id", noteId)
+      .select()
+      .single();
+
+    if (metadataError) {
+      console.error("Error updating note title metadata:", metadataError);
+      throw new Error(`Failed to update note title: ${metadataError.message}`);
     }
 
     return data;
@@ -359,23 +393,40 @@ export const updateNoteContent = async (
     console.log(`Updating content for note ${noteId}`);
 
     // Get the current note data
-    const note = await getNote(userId, noteId);
+    const note = await getNote(noteId);
+    if (!note) {
+      throw new Error("Note not found");
+    }
 
     // Update the content
     note.transcription = content;
+    note.updatedAt = new Date().toISOString();
 
-    // Update in Supabase
-    const { error } = await supabase
-      .from("note_metadata")
-      .update({ transcription: content })
-      .eq("id", noteId)
-      .select()
-      .single();
+    // Save the updated note back to storage
+    const notePath = `${userId}/${noteId}/note.json`;
+    const noteJson = JSON.stringify(note, null, 2);
+
+    const { error } = await supabase.storage
+      .from("notes")
+      .upload(notePath, noteJson, {
+        contentType: "application/json",
+        upsert: true,
+      });
 
     if (error) {
       console.error("Error updating note content:", error);
       throw new Error(`Failed to update note content: ${error.message}`);
     }
+
+    // Update the preview in metadata for search
+    const preview = content?.substring(0, 150) || "No content";
+    await supabase
+      .from("note_metadata")
+      .update({ 
+        preview,
+        updated_at: new Date().toISOString() 
+      })
+      .eq("id", noteId);
   } catch (error: any) {
     console.error("Error in updateNoteContent:", error);
     throw new Error(`Failed to update note content: ${error.message}`);
