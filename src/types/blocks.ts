@@ -19,7 +19,11 @@ export type BlockType =
   | 'quote'          // Important quote from lecture
   | 'code'           // Code snippet
   | 'table'          // Structured data table
-  | 'divider';       // Section separator
+  | 'divider'        // Section separator
+  | 'video-embed'    // Embedded video player
+  | 'video-timestamp'// Clickable video timestamp
+  | 'video-caption'  // Video caption/subtitle
+  | 'video-chapter'; // Video chapter marker
 
 // Core block interface - matches database schema
 export interface Block {
@@ -178,6 +182,43 @@ export interface DividerProps extends BaseBlockProps {
   margin?: number;
 }
 
+// Video embed block props - for embedded video players
+export interface VideoEmbedProps extends BaseBlockProps {
+  video_id: string;
+  platform: 'youtube' | 'vimeo' | 'uploaded';
+  start_time?: number;
+  end_time?: number;
+  autoplay?: boolean;
+  muted?: boolean;
+  title?: string;
+}
+
+// Video timestamp block props - clickable timestamps
+export interface VideoTimestampProps extends BaseBlockProps {
+  text: string;
+  timestamp: number; // in seconds
+  video_id?: string;
+  label?: string;
+}
+
+// Video caption block props - for subtitles/captions
+export interface VideoCaptionProps extends BaseBlockProps {
+  text: string;
+  start_time: number;
+  end_time: number;
+  speaker?: string;
+  language?: string;
+  auto_generated?: boolean;
+}
+
+// Video chapter block props - for chapter markers
+export interface VideoChapterProps extends BaseBlockProps {
+  title: string;
+  timestamp: number;
+  description?: string;
+  thumbnail_url?: string;
+}
+
 // Union type for all possible block props
 export type BlockProps = 
   | TextBlockProps
@@ -192,7 +233,11 @@ export type BlockProps =
   | QuoteProps
   | CodeBlockProps
   | TableBlockProps
-  | DividerProps;
+  | DividerProps
+  | VideoEmbedProps
+  | VideoTimestampProps
+  | VideoCaptionProps
+  | VideoChapterProps;
 
 // Note interface - matches the enhanced notes table
 export interface Note {
