@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AudioInputCard } from "@/components/ui/AudioInputCard";
 import { AudioRecorder } from "@/components/audio/AudioRecorder";
 import { AudioUploader } from "@/components/audio/AudioUploader";
-import { Mic, Upload, Search, RefreshCw, Loader2, Grid3X3, List, Calendar, Clock, ChevronRight, PanelLeftClose, PanelLeft } from "lucide-react";
+import { Mic, Upload, Search, RefreshCw, Loader2, Grid3X3, List, Calendar, Clock, ChevronRight, PanelLeftClose, PanelLeft, Youtube } from "lucide-react";
 import { Note } from "@/components/notes/NoteCard";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
@@ -25,8 +25,9 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useViewPreferences } from "@/hooks/use-view-preferences";
+import { YouTubeInput } from "@/components/video/YouTubeInput";
 
-type InputMethod = "record" | "upload" | "url";
+type InputMethod = "record" | "upload" | "url" | "youtube";
 type ViewMode = "grid" | "list" | "timeline";
 type DateGroup = "today" | "thisWeek" | "thisMonth" | "older";
 
@@ -478,25 +479,32 @@ const Dashboard = () => {
             <div className="mb-10">
               <h2 className="text-2xl font-semibold mb-4">New Note</h2>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 <AudioInputCard
                   icon={<Mic className="h-5 w-5" />}
                   title="Record Audio"
-                  description="Use your microphone to record lectures"
+                  description="Use your microphone to record"
                   isActive={inputMethod === "record"}
                   onClick={() => setInputMethod("record")}
                 />
                 <AudioInputCard
                   icon={<Upload className="h-5 w-5" />}
                   title="Upload Audio"
-                  description="Upload MP3, WAV, or M4A files"
+                  description="MP3, WAV, or M4A files"
                   isActive={inputMethod === "upload"}
                   onClick={() => setInputMethod("upload")}
                 />
                 <AudioInputCard
+                  icon={<Youtube className="h-5 w-5" />}
+                  title="YouTube Video"
+                  description="Import from YouTube"
+                  isActive={inputMethod === "youtube"}
+                  onClick={() => setInputMethod("youtube")}
+                />
+                <AudioInputCard
                   icon={<Search className="h-5 w-5" />}
-                  title="Web Link"
-                  description="Link to YouTube or other sources"
+                  title="Other Sources"
+                  description="Coming soon"
                   isActive={inputMethod === "url"}
                   onClick={() => setInputMethod("url")}
                 />
@@ -515,14 +523,21 @@ const Dashboard = () => {
                 />
               )}
 
+              {inputMethod === "youtube" && (
+                <div className="w-full max-w-2xl mx-auto">
+                  <YouTubeInput
+                    folderId={selectedFolderId}
+                    onVideoProcessed={(noteId) => {
+                      navigate(`/notes/${noteId}`);
+                    }}
+                  />
+                </div>
+              )}
+
               {inputMethod === "url" && (
                 <div className="w-full max-w-lg mx-auto">
-                  <div className="flex gap-2 items-center">
-                    <Input
-                      placeholder="Paste a YouTube URL, Google Drive link, etc."
-                      className="flex-1"
-                    />
-                    <Button onClick={handleUrlSubmit}>Process</Button>
+                  <div className="text-center py-8 text-muted-foreground">
+                    <p>Support for other video platforms coming soon!</p>
                   </div>
                 </div>
               )}
