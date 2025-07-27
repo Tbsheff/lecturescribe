@@ -55,6 +55,8 @@ interface FolderTreeProps {
     type: "folder" | "note",
   ) => void;
   selectedNoteId?: string;
+  expandedFolders?: Record<string, boolean>;
+  onToggleFolder?: (folderId: string) => void;
 }
 
 const FolderTree: React.FC<FolderTreeProps> = ({
@@ -65,10 +67,26 @@ const FolderTree: React.FC<FolderTreeProps> = ({
   onDeleteItem,
   onMoveItem,
   selectedNoteId,
+  expandedFolders: externalExpandedFolders,
+  onToggleFolder: externalToggleFolder,
 }) => {
-  const [expandedFolders, setExpandedFolders] = useState<
+  const [internalExpandedFolders, setInternalExpandedFolders] = useState<
     Record<string, boolean>
   >({});
+  
+  const expandedFolders = externalExpandedFolders || internalExpandedFolders;
+  const setExpandedFolders = externalToggleFolder ? 
+    (updater: any) => {
+      if (typeof updater === 'function') {
+        const current = externalExpandedFolders || {};
+        const newState = updater(current);
+        Object.keys(newState).forEach(key => {
+          if (newState[key] !== current[key]) {
+            externalToggleFolder(key);
+          }
+        });
+      }
+    } : setInternalExpandedFolders;
   const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [currentParentId, setCurrentParentId] = useState<string | null>(null);
@@ -86,10 +104,14 @@ const FolderTree: React.FC<FolderTreeProps> = ({
   const [dropTarget, setDropTarget] = useState<string | null>(null);
 
   const toggleFolder = (folderId: string) => {
-    setExpandedFolders((prev) => ({
-      ...prev,
-      [folderId]: !prev[folderId],
-    }));
+    if (externalToggleFolder) {
+      externalToggleFolder(folderId);
+    } else {
+      setInternalExpandedFolders((prev) => ({
+        ...prev,
+        [folderId]: !prev[folderId],
+      }));
+    }
   };
 
   const handleCreateFolder = () => {

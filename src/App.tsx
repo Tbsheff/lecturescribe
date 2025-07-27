@@ -8,6 +8,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import AdminPanelLayout from "@/components/admin-panel/admin-panel-layout";
 import Index from "./pages/Index";
+import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
 import NotesView from "./pages/NotesView";
 import HowToUse from "./pages/HowToUse";
@@ -37,7 +38,7 @@ const App = () => {
             <AuthProvider>
               <Routes>
                 <Route path="/auth" element={<AdminPanelLayout><Auth /></AdminPanelLayout>} />
-                <Route path="/" element={<AdminPanelLayout><Index /></AdminPanelLayout>} />
+                <Route path="/" element={<AdminPanelLayout><Dashboard /></AdminPanelLayout>} />
                 <Route path="/notes/:noteId" element={<AdminPanelLayout><NotesView /></AdminPanelLayout>} />
                 <Route path="/how-to-use" element={<AdminPanelLayout><HowToUse /></AdminPanelLayout>} />
                 <Route path="/settings" element={<AdminPanelLayout><Settings /></AdminPanelLayout>} />
