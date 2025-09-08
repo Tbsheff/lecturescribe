@@ -1,8 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
+import { TranscriptionProviderType } from '@/types/transcription';
+import { transcriptionConfig } from './transcriptionConfig';
 
 interface TranscriptionOptions {
   audioFile: File;
   userId: string;
+  provider?: TranscriptionProviderType;
 }
 
 // Initialize Supabase client
@@ -13,13 +16,14 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 export const processAudioWithSummary = async (
   audioFile: File,
   userId: string,
-  metadata: any
+  metadata: any,
+  provider?: TranscriptionProviderType
 ): Promise<{ transcription: string; summary: string; noteId: string }> => {
   try {
     console.log('Processing audio with summary:', { userId, metadata });
     
     // Process the audio using Supabase
-    const { transcription, summary, fileUrl } = await processAudioInSupabase(audioFile);
+    const { transcription, summary, fileUrl } = await processAudioInSupabase(audioFile, provider);
     
     // Save the note with transcription and summary
     const { data: noteData, error: noteError } = await supabase
@@ -50,7 +54,7 @@ export const processAudioWithSummary = async (
   }
 };
 
-export const transcribeAudio = async ({ audioFile, userId }: TranscriptionOptions) => {
+export const transcribeAudio = async ({ audioFile, userId, provider }: TranscriptionOptions) => {
   try {
     // Early return with mock response if we don't have proper Supabase config
     if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
@@ -79,8 +83,13 @@ export const transcribeAudio = async ({ audioFile, userId }: TranscriptionOption
     const audioUrl = urlData?.publicUrl;
 
     // Call the Edge Function to process the audio
+    const requestBody = { 
+      audioUrl,
+      provider: provider || transcriptionConfig.getDefaultProvider()
+    };
+    
     const { data, error } = await supabase.functions.invoke('summarize-audio', {
-      body: { audioUrl },
+      body: requestBody,
     });
 
     if (error) {
@@ -145,7 +154,7 @@ export const fetchNoteById = async (noteId: string) => {
 };
 
 // Helper function to process audio in Supabase
-export async function processAudioInSupabase(audioFile: File): Promise<{ transcription: string; summary: string; fileUrl: string }> {
+export async function processAudioInSupabase(audioFile: File, provider?: TranscriptionProviderType): Promise<{ transcription: string; summary: string; fileUrl: string }> {
   console.log('processAudioInSupabase: Start');
   // Validate the audio file
   if (!audioFile || !audioFile.size) {
@@ -248,7 +257,8 @@ export async function processAudioInSupabase(audioFile: File): Promise<{ transcr
       body: {
         audioUrl: publicUrl,
         contentType: contentType,
-        fileName: filename
+        fileName: filename,
+        provider: provider || transcriptionConfig.getDefaultProvider()
       }
     });
 
