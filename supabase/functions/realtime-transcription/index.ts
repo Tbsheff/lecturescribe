@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,8 +24,43 @@ serve(async (req) => {
   }
 
   try {
+    // Verify authentication
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'No authorization header' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Create Supabase client with the user's JWT
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      global: {
+        headers: { Authorization: authHeader },
+      },
+    });
+
+    // Verify the user is authenticated
+    const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
+
+    if (authError || !user) {
+      console.error('Authentication failed:', authError);
+      return new Response(JSON.stringify({ error: 'Authentication failed' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log('Authenticated user:', user.id);
+
+    // Log session start for audit trail
+    const sessionId = crypto.randomUUID();
+    console.log(`Starting transcription session ${sessionId} for user ${user.id}`);
+
     const DEEPGRAM_API_KEY = Deno.env.get('DEEPGRAM_API_KEY');
-    
+
     if (!DEEPGRAM_API_KEY) {
       throw new Error('DEEPGRAM_API_KEY is not set');
     }
@@ -48,7 +84,7 @@ serve(async (req) => {
       sample_rate: parseInt(url.searchParams.get('sample_rate') || '16000'),
     };
 
-    console.log('Establishing WebSocket proxy with options:', options);
+    console.log(`Session ${sessionId}: Establishing WebSocket proxy with options:`, options);
 
     // Upgrade to WebSocket
     const { socket: clientSocket, response } = Deno.upgradeWebSocket(req);
@@ -67,7 +103,7 @@ serve(async (req) => {
         }
       });
 
-      console.log('Connecting to Deepgram:', deepgramUrl.toString());
+      console.log(`Session ${sessionId}: Connecting to Deepgram`);
 
       deepgramSocket = new WebSocket(deepgramUrl.toString(), undefined, {
         headers: {
@@ -76,14 +112,19 @@ serve(async (req) => {
       });
 
       deepgramSocket.onopen = () => {
-        console.log('Connected to Deepgram');
+        console.log(`Session ${sessionId}: Connected to Deepgram`);
         isDeepgramConnected = true;
         
         // Send connection confirmation to client
         if (clientSocket.readyState === WebSocket.OPEN) {
           clientSocket.send(JSON.stringify({
             type: 'ConnectionEstablished',
-            data: { provider: 'deepgram', model: options.model }
+            data: {
+              provider: 'deepgram',
+              model: options.model,
+              sessionId: sessionId,
+              userId: user.id
+            }
           }));
         }
       };
@@ -139,7 +180,7 @@ serve(async (req) => {
 
     // Set up client WebSocket handlers
     clientSocket.onopen = () => {
-      console.log('Client WebSocket connected');
+      console.log(`Session ${sessionId}: Client WebSocket connected for user ${user.id}`);
       connectToDeepgram();
     };
 
@@ -185,7 +226,10 @@ serve(async (req) => {
     };
 
     clientSocket.onclose = () => {
-      console.log('Client WebSocket closed');
+      console.log(`Session ${sessionId}: Client WebSocket closed for user ${user.id}`);
+
+      // Log session end for audit trail
+      console.log(`Ending transcription session ${sessionId} for user ${user.id}`);
       
       // Close Deepgram connection
       if (deepgramSocket) {

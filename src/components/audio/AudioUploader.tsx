@@ -3,7 +3,7 @@ import { Upload, File, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { processAudioWithSummary } from '@/services/transcription';
+import { processAudioWithSummary } from '@/services/transcriptionService';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 

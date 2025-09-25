@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
-import { fetchNotes } from "@/services/transcription";
+import { fetchNotes } from "@/services/transcriptionService";
 
 type InputMethod = "record" | "upload" | "url";
 

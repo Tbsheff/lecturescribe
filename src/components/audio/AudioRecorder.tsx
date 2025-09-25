@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { AudioVisualizer } from './AudioVisualizer';
 import { useMicrophone } from '@/hooks/useMicrophone';
 import { toast } from 'sonner';
-import { processAudioWithSummary } from '@/services/transcription';
+import { processAudioWithSummary } from '@/services/transcriptionService';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 
